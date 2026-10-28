@@ -4,3 +4,4 @@
 /secrets.yml
 *.vault
 .vault_pass
+/.cache/

@@ -1,0 +1,17 @@
+---
+- name: Check a prebuilt Caddy was given
+  ansible.builtin.assert:
+    that:
+      - caddy_binary_src is defined
+      - caddy_binary_sha256 is defined
+    fail_msg: caddy_build_method=binary needs caddy_binary_src and caddy_binary_sha256.
+
+- name: Copy the prebuilt Caddy binary
+  ansible.builtin.copy:
+    src: "{{ caddy_binary_src }}"
+    dest: "{{ caddy_binary_path }}"
+    checksum: "{{ caddy_binary_sha256 }}"
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart Caddy

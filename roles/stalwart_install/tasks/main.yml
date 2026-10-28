@@ -14,6 +14,9 @@
       that are not pinned in defaults/main.yml.
   no_log: true
 
+- name: Deal with conflicting services
+  ansible.builtin.include_tasks: conflicts.yml
+
 - name: Install packages needed to unpack the release archives
   ansible.builtin.apt:
     name: [ca-certificates, xz-utils, tar]

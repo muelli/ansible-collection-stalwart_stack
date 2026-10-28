@@ -1,0 +1,23 @@
+---
+- name: Refuse hosts that DebOps still configures for a conflicting service
+  ansible.builtin.fail:
+    msg: >-
+      {{ inventory_hostname }} is in the inventory group debops_service_{{ stalwart_debops_service_groups[item] }},
+      so the next `debops run` brings {{ item }} back. Remove it from that group
+      (see examples/hosts.example.ini) or drop {{ item }} from stalwart_conflicting_services.
+  loop: "{{ stalwart_conflicting_services }}"
+  when:
+    - stalwart_check_debops_groups
+    - item in stalwart_debops_service_groups
+    - ('debops_service_' ~ stalwart_debops_service_groups[item]) in group_names
+
+- name: Stop and disable conflicting services
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  loop: "{{ stalwart_conflicting_services }}"
+  register: stalwart_stop_result
+  failed_when:
+    - stalwart_stop_result.failed | default(false)
+    - "'Could not find the requested service' not in (stalwart_stop_result.msg | default(''))"

@@ -1,0 +1,85 @@
+---
+- name: Work out what to build
+  ansible.builtin.set_fact:
+    caddy_goarch: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}"
+    caddy_build_withs: >-
+      {{ (caddy_dns_plugins | map('regex_replace', '^', 'github.com/caddy-dns/') | list)
+         + caddy_extra_modules + caddy_xcaddy_modules }}
+
+- name: Name the build after its inputs
+  ansible.builtin.set_fact:
+    caddy_build_name: >-
+      caddy-{{ ({ 'v': caddy_xcaddy_caddy_version, 'with': caddy_build_withs,
+                  'replace': caddy_xcaddy_replaces, 'arch': caddy_goarch } | to_json(sort_keys=True) | hash('sha1'))[:16] }}
+
+- name: Check whether this build is already cached on the controller
+  ansible.builtin.stat:
+    path: "{{ caddy_build_cache_dir }}/{{ caddy_build_name }}"
+  delegate_to: localhost
+  become: false
+  register: caddy_cached_build
+
+- name: Build Caddy on the controller
+  when: not caddy_cached_build.stat.exists
+  delegate_to: localhost
+  become: false
+  throttle: 1
+  block:
+    - name: Create the build cache directory
+      ansible.builtin.file:
+        path: "{{ caddy_build_cache_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Build Caddy with podman
+      ansible.builtin.command:
+        argv: >-
+          {{ ['podman', 'run', '--rm',
+              '-e', 'CGO_ENABLED=0', '-e', 'GOOS=linux', '-e', 'GOARCH=' ~ caddy_goarch,
+              '-v', caddy_build_cache_dir ~ ':/out:Z', caddy_builder_image,
+              'xcaddy', 'build']
+             + ([] if caddy_xcaddy_caddy_version == 'latest' else [caddy_xcaddy_caddy_version])
+             + (caddy_build_withs | map('regex_replace', '^', '--with=') | list)
+             + (caddy_xcaddy_replaces | map('regex_replace', '^', '--replace=') | list)
+             + ['--output', '/out/' ~ caddy_build_name ~ '.tmp'] }}
+      when: caddy_xcaddy_runner == 'podman'
+      changed_when: true
+
+    - name: Build Caddy with the local xcaddy
+      ansible.builtin.command:
+        argv: >-
+          {{ ['xcaddy', 'build']
+             + ([] if caddy_xcaddy_caddy_version == 'latest' else [caddy_xcaddy_caddy_version])
+             + (caddy_build_withs | map('regex_replace', '^', '--with=') | list)
+             + (caddy_xcaddy_replaces | map('regex_replace', '^', '--replace=') | list)
+             + ['--output', caddy_build_cache_dir ~ '/' ~ caddy_build_name ~ '.tmp'] }}
+      environment:
+        CGO_ENABLED: "0"
+        GOOS: linux
+        GOARCH: "{{ caddy_goarch }}"
+      when: caddy_xcaddy_runner == 'local'
+      changed_when: true
+
+    - name: Move the finished build into place
+      ansible.builtin.command:
+        argv:
+          - mv
+          - "{{ caddy_build_cache_dir }}/{{ caddy_build_name }}.tmp"
+          - "{{ caddy_build_cache_dir }}/{{ caddy_build_name }}"
+      changed_when: true
+
+    - name: Remove the builder image
+      ansible.builtin.command:
+        argv: [podman, rmi, "{{ caddy_builder_image }}"]
+      when: caddy_xcaddy_runner == 'podman' and caddy_builder_remove_image
+      changed_when: true
+      failed_when: false
+
+- name: Copy the built Caddy to the host
+  ansible.builtin.copy:
+    src: "{{ caddy_build_cache_dir }}/{{ caddy_build_name }}"
+    dest: "{{ caddy_binary_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart Caddy

@@ -1,13 +1,43 @@
 ---
 # --- Binary -----------------------------------------------------------------
-# Caddy is fetched from the official build service so DNS-01 plugins can be
-# compiled in. caddy_dns_plugins are names below github.com/caddy-dns/,
-# caddy_extra_modules are complete module paths (for example your own fork).
+# caddy_build_method:
+#   download  fetch a build with the plugins from the official build service
+#   xcaddy    build on the controller (see below), cache it, copy it to the host
+#   binary    copy a prebuilt file from the controller (caddy_binary_src)
+caddy_build_method: download
+
+# caddy_dns_plugins are names below github.com/caddy-dns/, caddy_extra_modules
+# are complete module paths. Both are used by download and xcaddy.
 caddy_dns_plugins: []
 caddy_extra_modules: []
-# Replace the whole URL (for example with a release of your own build).
+
+# download: replace the whole URL (for example with a release of your own build).
 caddy_download_url: >-
   https://caddyserver.com/api/download?os=linux&arch={{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}{% for m in (caddy_dns_plugins | map('regex_replace', '^', 'github.com/caddy-dns/') | list) + caddy_extra_modules %}&p={{ m }}{% endfor %}
+
+# xcaddy: builds happen on the controller, nothing is installed on the target.
+# Each entry is what follows `--with`/`--replace` on the xcaddy command line, so
+# versions (mod@v1.2.3 or a commit) and replacements (mod=fork@v1) work:
+#   caddy_xcaddy_modules: ["github.com/mholt/caddy-l4/modules/l4proxy"]
+#   caddy_xcaddy_replaces: ["github.com/libdns/spaceship=github.com/me/fork@v1.1.0"]
+caddy_xcaddy_modules: []
+caddy_xcaddy_replaces: []
+# "latest" or a version such as v2.10.2. Pin it for reproducible builds.
+caddy_xcaddy_caddy_version: latest
+# podman: run the official caddy builder image with --rm, so the controller
+#         needs neither Go nor xcaddy (only podman).
+# local:  use the xcaddy found in PATH.
+caddy_xcaddy_runner: podman
+caddy_builder_image: "docker.io/library/caddy:{{ 'builder' if caddy_xcaddy_caddy_version == 'latest' else (caddy_xcaddy_caddy_version | regex_replace('^v', '')) ~ '-builder' }}"
+# Remove the builder image again after a build (it is pulled on every build then).
+caddy_builder_remove_image: false
+# Finished builds are cached here on the controller, keyed by their inputs.
+caddy_build_cache_dir: "{{ playbook_dir }}/.cache/caddy"
+
+# binary: a prebuilt Caddy on the controller, and its sha256.
+# caddy_binary_src: /path/to/caddy
+# caddy_binary_sha256: "..."
+
 caddy_binary_path: /usr/local/bin/caddy
 caddy_marker_dir: /usr/local/share/caddy-front
 

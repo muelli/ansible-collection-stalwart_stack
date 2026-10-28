@@ -48,6 +48,13 @@ on x86_64 or aarch64 with systemd.
   `NetworkListener.implicitTls`); the CLI has to match the server version.
 * Port 80/443 must be free. `caddy_front` refuses to start Caddy otherwise (for
   example when DebOps runs Apache or nginx on the same host).
+* `stalwart_conflicting_services` (default empty) lists units to stop and
+  disable first, for example `[apache2, postfix, dovecot, rspamd, opendkim]`.
+  On a DebOps-managed host the next `debops run` would start them again, so the
+  play fails when the host is still in the matching `debops_service_*` group
+  (`stalwart_check_debops_groups: false` turns that off). Use the nested groups
+  of `examples/hosts.example.ini`: moving a host between `with_stalwart` and
+  `without_stalwart` is the only edit needed.
 * The Stalwart unit conflicts with `postfix`, `sendmail` and `exim4`.
 * The plan contains DNS and relay secrets; it is written `0600` and hidden from
   Ansible output. The fallback admin password (>= 12 characters) is required.
@@ -56,8 +63,18 @@ on x86_64 or aarch64 with systemd.
 * `caddy_user_instances` expects the accounts to exist (DebOps can create them).
 * New Stalwart or CLI versions need their sha256 in `stalwart_checksums` /
   `stalwart_cli_checksums`, or set `stalwart_checksum` / `stalwart_cli_checksum`.
-* Caddy is downloaded without a checksum from the build service. Pin your own
-  build with `caddy_download_url` if that matters to you.
+* `caddy_build_method` is `download` (build service, no checksum), `xcaddy` or
+  `binary` (prebuilt file plus `caddy_binary_sha256`).
+* `xcaddy` builds on the controller and caches the result in
+  `caddy_build_cache_dir` (default `.cache/caddy`, keyed by version, modules and
+  architecture). By default it runs the official `caddy:<ver>-builder` image
+  with `podman run --rm`, so the controller needs only podman; the pulled image
+  stays in podman's storage unless `caddy_builder_remove_image: true`. With
+  `caddy_xcaddy_runner: local` it uses `xcaddy` from PATH. Entries of
+  `caddy_xcaddy_modules` / `caddy_xcaddy_replaces` are the arguments of
+  `--with` / `--replace`. When you pin `caddy_xcaddy_caddy_version`, pin the
+  modules too: a new plugin release can require a newer Caddy and the build
+  fails.
 
 ## Tested
 
@@ -66,4 +83,6 @@ Caddy with its internal CA: fresh install, repeat run without changes,
 fallback to recovery, forced apply through the management listener, web path
 Caddy -> Stalwart (PROXY v2) and Caddy -> user socket -> user Caddy, socket
 unreachable for other users, certificate sync and reload.
+xcaddy build via podman (cache hit on the second run, plugin present in the
+binary) and the DebOps group check.
 Not tested: DNS-01 against real providers and automatic DNS management.

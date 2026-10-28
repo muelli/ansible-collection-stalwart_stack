@@ -58,3 +58,19 @@ stalwart_cli_env_file: "{{ stalwart_config_dir }}/cli.env"
 
 stalwart_service_name: stalwart
 stalwart_service_enabled: true
+
+# --- Conflicting services ---------------------------------------------------
+# Services stopped and disabled before Stalwart and Caddy start, for hosts that
+# run Apache, nginx or a classic mail stack. Empty means leave everything alone.
+#   stalwart_conflicting_services: [apache2, postfix, dovecot, rspamd, opendkim]
+stalwart_conflicting_services: []
+# When a host is still in the matching DebOps service group the next DebOps run
+# would undo this, so the play fails instead.
+stalwart_check_debops_groups: true
+stalwart_debops_service_groups:
+  apache2: apache
+  nginx: nginx
+  postfix: postfix
+  dovecot: dovecot
+  rspamd: rspamd
+  opendkim: opendkim
