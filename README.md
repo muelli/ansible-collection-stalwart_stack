@@ -76,6 +76,39 @@ on x86_64 or aarch64 with systemd.
   modules too: a new plugin release can require a newer Caddy and the build
   fails.
 
+## Bulwark webmail
+
+The `bulwark` role runs the full Bulwark edition as a podman container through a
+Quadlet unit (`/etc/containers/systemd/bulwark.container`), so systemd manages
+it like a native service (`systemctl status bulwark`). It uses the host network,
+listens on `127.0.0.1:3000` and talks to Stalwart's loopback management
+listener. Enable it with `bulwark_enabled: true` and `bulwark_admin_password`
+(vault), then add a Caddy site:
+
+```yaml
+caddy_domains:
+  - name: webmail.example.org
+    dns: hetzner
+    caddy_directive: |
+      reverse_proxy 127.0.0.1:3000 {
+          flush_interval -1
+      }
+```
+
+## Removing things
+
+* Entries of `stalwart_domains`, `stalwart_relay_hosts`,
+  `stalwart_server_listeners` and `caddy_user_instances` accept
+  `state: absent`. Files, systemd units, certificates, group memberships and the
+  objects inside Stalwart (domain, its DKIM keys, certificate, relay, listener)
+  are removed. `stalwart_absent_dns_providers` removes DNS providers.
+* Whole roles: `stalwart_install_state`, `caddy_front_state`, `bulwark_state`
+  set to `absent`. Data stays unless `stalwart_purge_data`, `caddy_purge_data`
+  or `bulwark_purge_data` is true. A `caddy_user_instances` entry can add
+  `purge: true` and `release_linger: true`.
+* `teardown.yml` removes everything in reverse order:
+  `ansible-playbook teardown.yml -e stalwart_purge_data=true ...`
+
 ## Tested
 
 Ubuntu 26.04 VM, ansible-core 2.21.5, Stalwart 1.0.0, stalwart-cli 1.0.14,
@@ -85,7 +118,10 @@ Caddy -> Stalwart (PROXY v2) and Caddy -> user socket -> user Caddy, socket
 unreachable for other users, certificate sync and reload.
 xcaddy build via podman (cache hit on the second run, plugin present in the
 binary) and the DebOps group check.
-Not tested: DNS-01 against real providers and automatic DNS management.
+Also tested: Bulwark as a Quadlet container behind Caddy, `state: absent` for
+domains, relays, listeners and per-user instances, the full teardown with purge
+and a fresh reinstall (second run changed nothing).
+Not tested: logging in to Bulwark, DNS-01 against real providers and automatic DNS management.
 
 ## License
 
