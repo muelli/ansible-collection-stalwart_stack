@@ -85,6 +85,9 @@ caddy_cert_wait_timeout: 180
 caddy_dns_field_map:
   gandi: { layout: anonymous }
   hetzner: { layout: anonymous }
+  porkbun:
+    layout: block
+    fields: { apiKey: api_key, secretApiKey: api_secret_key }
   spaceship:
     layout: block
     fields: { apikey: api_key, apisecret: api_secret }
