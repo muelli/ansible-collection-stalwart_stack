@@ -8,6 +8,8 @@
 #           file_server
 #     caddyfile: files/alice.Caddyfile   # optional; replaces the generated file
 caddy_user_instances: []
+# Default for entries without their own `state`; teardown.yml sets it to absent.
+caddy_user_instances_state: present
 
 # The accounts must exist already (for example created by DebOps).
 caddy_user_socket_dir: /run/caddy-user-sockets
@@ -19,3 +21,10 @@ caddy_front_user: caddy
 caddy_user_idle_time: 30m
 # Request a page through the socket after deploying.
 caddy_user_smoke_test: true
+
+# --- Removal ----------------------------------------------------------------
+# An entry with `state: absent` stops and removes the units of that account and
+# takes the fronting Caddy out of its group. `purge: true` also deletes the
+# generated or copied Caddyfile and ~/.config/caddy. Lingering was switched on
+# for the account; it is only switched off again with `release_linger: true`.
+#   - { name: alice, state: absent, purge: true, release_linger: true }

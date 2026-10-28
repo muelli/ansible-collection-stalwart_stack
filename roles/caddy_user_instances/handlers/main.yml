@@ -3,3 +3,8 @@
   ansible.builtin.systemd_service:
     name: caddy
     state: restarted
+  register: caddy_group_restart
+  # A teardown removes Caddy before this handler runs.
+  failed_when:
+    - caddy_group_restart.failed | default(false)
+    - "'Could not find the requested service' not in (caddy_group_restart.msg | default(''))"

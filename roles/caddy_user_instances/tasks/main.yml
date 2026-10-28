@@ -1,4 +1,14 @@
 ---
+- name: Normalise the instance list
+  ansible.builtin.set_fact:
+    _caddy_all: >-
+      {% set r = [] %}{% for i in caddy_user_instances %}{% set _ = r.append(i if i is mapping else {'name': i}) %}{% endfor %}{{ r }}
+
+- name: Split the instances by state
+  ansible.builtin.set_fact:
+    _caddy_present: "{{ _caddy_all | rejectattr('state', 'defined') | list + _caddy_all | selectattr('state', 'defined') | rejectattr('state', 'equalto', 'absent') | list if caddy_user_instances_state != 'absent' else [] }}"
+    _caddy_absent: "{{ _caddy_all | selectattr('state', 'defined') | selectattr('state', 'equalto', 'absent') | list if caddy_user_instances_state != 'absent' else _caddy_all }}"
+
 - name: Create the shared socket directory now and after reboots
   ansible.builtin.copy:
     dest: /etc/tmpfiles.d/caddy-user-sockets.conf
@@ -7,6 +17,7 @@
     group: root
     mode: "0644"
   register: caddy_user_tmpfiles
+  when: _caddy_present | length > 0
 
 - name: Create the socket directory
   ansible.builtin.file:
@@ -15,10 +26,25 @@
     owner: root
     group: root
     mode: "1777"
+  when: _caddy_present | length > 0
 
-- name: Configure each instance
+- name: Remove instances marked absent
+  ansible.builtin.include_tasks: absent_instance.yml
+  loop: "{{ _caddy_absent }}"
+  loop_control:
+    loop_var: caddy_user_item
+    label: "{{ caddy_user_item.name }}"
+
+- name: Configure each remaining instance
   ansible.builtin.include_tasks: instance.yml
-  loop: "{{ caddy_user_instances }}"
+  loop: "{{ _caddy_present }}"
   loop_control:
     loop_var: caddy_user_item
     label: "{{ caddy_user_item.name | default(caddy_user_item) }}"
+
+- name: Remove the shared socket directory when no instance is left
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: [/etc/tmpfiles.d/caddy-user-sockets.conf, "{{ caddy_user_socket_dir }}"]
+  when: _caddy_present | length == 0 and _caddy_all | length > 0
