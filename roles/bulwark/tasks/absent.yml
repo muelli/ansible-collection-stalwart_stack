@@ -1,0 +1,58 @@
+---
+- name: Stop Bulwark
+  ansible.builtin.systemd_service:
+    name: "{{ bulwark_service_name }}"
+    state: stopped
+  register: bulwark_stop_result
+  failed_when:
+    - bulwark_stop_result.failed | default(false)
+    - "'Could not find the requested service' not in (bulwark_stop_result.msg | default(''))"
+
+- name: Remove the Quadlet unit and the environment directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/etc/containers/systemd/{{ bulwark_service_name }}.container"
+    - "{{ bulwark_env_dir }}"
+
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Clear the failed state of the removed unit
+  ansible.builtin.command:
+    argv: [systemctl, reset-failed, "{{ bulwark_service_name }}.service"]
+  changed_when: false
+  failed_when: false
+
+- name: Check whether podman is installed
+  ansible.builtin.command:
+    argv: [podman, --version]
+  register: bulwark_podman
+  changed_when: false
+  failed_when: false
+
+- name: Remove the container image
+  ansible.builtin.command:
+    argv: [podman, rmi, --ignore, "{{ bulwark_image_ref }}"]
+  when: bulwark_podman.rc == 0
+  changed_when: true
+
+- name: Remove data and account
+  when: bulwark_purge_data | bool
+  block:
+    - name: Remove the data directory
+      ansible.builtin.file:
+        path: "{{ bulwark_data_dir }}"
+        state: absent
+
+    - name: Remove the account
+      ansible.builtin.user:
+        name: "{{ bulwark_user }}"
+        state: absent
+
+    - name: Remove the group
+      ansible.builtin.group:
+        name: "{{ bulwark_group }}"
+        state: absent

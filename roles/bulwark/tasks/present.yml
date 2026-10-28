@@ -1,0 +1,109 @@
+---
+- name: Check required variables
+  ansible.builtin.assert:
+    that:
+      - bulwark_admin_password is defined
+      - bulwark_admin_password | length >= 12
+    fail_msg: Set bulwark_admin_password (at least 12 characters).
+  no_log: true
+
+- name: Install podman
+  ansible.builtin.apt:
+    name: podman
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create the Bulwark group
+  ansible.builtin.group:
+    name: "{{ bulwark_group }}"
+    system: true
+
+- name: Create the Bulwark user
+  ansible.builtin.user:
+    name: "{{ bulwark_user }}"
+    group: "{{ bulwark_group }}"
+    home: "{{ bulwark_data_dir }}"
+    create_home: false
+    shell: /usr/sbin/nologin
+    system: true
+  register: bulwark_user_result
+
+- name: Remember the numeric ids the container runs as
+  ansible.builtin.set_fact:
+    bulwark_uid: "{{ bulwark_user_result.uid }}"
+    bulwark_gid: "{{ bulwark_user_result.group }}"
+
+- name: Create the data directories
+  ansible.builtin.file:
+    path: "{{ bulwark_data_dir }}{{ item }}"
+    state: directory
+    owner: "{{ bulwark_user }}"
+    group: "{{ bulwark_group }}"
+    mode: "0750"
+  loop: ["", /admin, /admin-state, /settings, /telemetry, /version-check]
+
+- name: Create the environment directory
+  ansible.builtin.file:
+    path: "{{ bulwark_env_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Write the secrets environment file
+  ansible.builtin.copy:
+    dest: "{{ bulwark_env_dir }}/bulwark.env"
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      ADMIN_PASSWORD={{ bulwark_admin_password }}
+      {% if bulwark_session_secret is defined %}
+      SESSION_SECRET={{ bulwark_session_secret }}
+      {% endif %}
+      {% for k, v in bulwark_extra_env.items() %}
+      {{ k }}={{ v }}
+      {% endfor %}
+  no_log: true
+  notify: Restart Bulwark
+
+- name: Check whether the image is already present
+  ansible.builtin.command:
+    argv: [podman, image, exists, "{{ bulwark_image_ref }}"]
+  register: bulwark_image_present
+  changed_when: false
+  failed_when: false
+
+- name: Pull the Bulwark image
+  ansible.builtin.command:
+    argv: [podman, pull, --quiet, "{{ bulwark_image_ref }}"]
+  when: bulwark_image_present.rc != 0
+  notify: Restart Bulwark
+
+- name: Install the Quadlet unit
+  ansible.builtin.template:
+    src: bulwark.container.j2
+    dest: "/etc/containers/systemd/{{ bulwark_service_name }}.container"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd for Bulwark
+    - Restart Bulwark
+
+- name: Apply pending changes
+  ansible.builtin.meta: flush_handlers
+
+- name: Start Bulwark
+  ansible.builtin.systemd_service:
+    name: "{{ bulwark_service_name }}"
+    state: started
+
+- name: Wait until Bulwark answers its health check
+  ansible.builtin.uri:
+    url: "http://{{ bulwark_bind }}:{{ bulwark_port }}/api/health"
+  register: bulwark_health
+  until: bulwark_health.status == 200
+  retries: "{{ (bulwark_health_timeout / 3) | int }}"
+  delay: 3

@@ -1,0 +1,9 @@
+---
+- name: Reload systemd for Bulwark
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Restart Bulwark
+  ansible.builtin.systemd_service:
+    name: "{{ bulwark_service_name }}"
+    state: restarted

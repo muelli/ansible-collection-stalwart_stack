@@ -1,0 +1,8 @@
+---
+- name: Remove bulwark
+  ansible.builtin.include_tasks: absent.yml
+  when: bulwark_state == 'absent'
+
+- name: Install and configure bulwark
+  ansible.builtin.include_tasks: present.yml
+  when: bulwark_state != 'absent'

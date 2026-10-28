@@ -12,3 +12,5 @@
     - caddy_front
     - caddy_user_instances
     - stalwart_config
+    - role: bulwark
+      when: bulwark_enabled | default(false) | bool

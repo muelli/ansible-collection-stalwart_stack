@@ -1,0 +1,36 @@
+# Managed by Ansible (bulwark). Quadlet: systemd generates {{ bulwark_service_name }}.service.
+[Unit]
+Description=Bulwark webmail
+Wants=network-online.target
+After=network-online.target stalwart.service
+
+[Container]
+Image={{ bulwark_image_ref }}
+ContainerName={{ bulwark_service_name }}
+Network=host
+User={{ bulwark_uid }}
+Group={{ bulwark_gid }}
+EnvironmentFile={{ bulwark_env_dir }}/bulwark.env
+Environment=HOSTNAME={{ bulwark_bind }}
+Environment=PORT={{ bulwark_port }}
+Environment=JMAP_SERVER_URL={{ bulwark_jmap_url }}
+Environment=SETTINGS_SYNC_ENABLED={{ bulwark_settings_sync | bool | lower }}
+Environment=BULWARK_TELEMETRY={{ bulwark_telemetry }}
+Volume={{ bulwark_data_dir }}/admin:/app/data/admin
+Volume={{ bulwark_data_dir }}/admin-state:/app/data/admin-state
+Volume={{ bulwark_data_dir }}/settings:/app/data/settings
+Volume={{ bulwark_data_dir }}/telemetry:/app/data/telemetry
+Volume={{ bulwark_data_dir }}/version-check:/app/data/version-check
+ReadOnly=true
+Tmpfs=/tmp
+DropCapability=ALL
+NoNewPrivileges=true
+Pull=never
+
+[Service]
+Restart=always
+RestartSec=5
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target
