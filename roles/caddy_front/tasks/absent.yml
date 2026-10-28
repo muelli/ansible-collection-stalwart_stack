@@ -1,0 +1,61 @@
+---
+- name: Find the certificate sync path units
+  ansible.builtin.find:
+    paths: /etc/systemd/system/multi-user.target.wants
+    patterns: "stalwart-cert-sync@*.path"
+    file_type: any
+  register: caddy_sync_units
+
+- name: Stop and disable the certificate sync path units
+  ansible.builtin.systemd_service:
+    name: "{{ item.path | basename }}"
+    state: stopped
+    enabled: false
+  loop: "{{ caddy_sync_units.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+
+- name: Stop and disable Caddy
+  ansible.builtin.systemd_service:
+    name: caddy
+    state: stopped
+    enabled: false
+  register: caddy_stop_result
+  failed_when:
+    - caddy_stop_result.failed | default(false)
+    - "'Could not find the requested service' not in (caddy_stop_result.msg | default(''))"
+
+- name: Remove units, binary, configuration and markers
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/systemd/system/caddy.service
+    - /etc/systemd/system/stalwart-cert-sync@.service
+    - /etc/systemd/system/stalwart-cert-sync@.path
+    - "{{ caddy_binary_path }}"
+    - "{{ caddy_config_dir }}"
+    - "{{ caddy_marker_dir }}"
+
+- name: Remove the state, the certificate copies and the account
+  when: caddy_purge_data | bool
+  block:
+    - name: Remove the directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop: ["{{ caddy_home }}", "{{ stalwart_certs_dir }}"]
+
+    - name: Remove the account
+      ansible.builtin.user:
+        name: "{{ caddy_user }}"
+        state: absent
+
+    - name: Remove the group
+      ansible.builtin.group:
+        name: "{{ caddy_group }}"
+        state: absent
+
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true

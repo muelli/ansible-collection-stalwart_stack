@@ -97,3 +97,10 @@ caddy_dns_field_map:
       application_key: application_key
       application_secret: application_secret
       consumer_key: consumer_key
+
+# --- Removal ----------------------------------------------------------------
+# absent stops Caddy and removes unit, binary and configuration. The state
+# (ACME account, certificates) stays unless caddy_purge_data. Purging also
+# removes the certificate copies in stalwart_certs_dir and the Caddy account.
+caddy_front_state: present
+caddy_purge_data: false
