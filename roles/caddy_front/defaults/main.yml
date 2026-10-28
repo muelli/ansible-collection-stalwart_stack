@@ -22,8 +22,8 @@ caddy_download_url: >-
 #   caddy_xcaddy_replaces: ["github.com/libdns/spaceship=github.com/me/fork@v1.1.0"]
 caddy_xcaddy_modules: []
 caddy_xcaddy_replaces: []
-# "latest" or a version such as v2.10.2. Pin it for reproducible builds.
-caddy_xcaddy_caddy_version: latest
+# A version such as v2.11.7, or "latest". Pinned by default for reproducible builds.
+caddy_xcaddy_caddy_version: v2.11.7
 # podman: run the official caddy builder image with --rm, so the controller
 #         needs neither Go nor xcaddy (only podman).
 # local:  use the xcaddy found in PATH.

@@ -27,7 +27,12 @@ caddy_domains:
     dns: hetzner
     user: alice
 
-caddy_dns_plugins: [hetzner]
+# Pinned build on the controller (see README). Newest versions that build
+# together as of 2026-10-28; Caddy itself defaults to v2.11.7.
+caddy_build_method: xcaddy
+caddy_xcaddy_modules:
+  - github.com/caddy-dns/hetzner/v2@v2.0.1
+  - github.com/mholt/caddy-l4/modules/l4proxyprotocol@v0.1.2
 
 dns_key_map:
   hetzner:
