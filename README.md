@@ -86,3 +86,7 @@ unreachable for other users, certificate sync and reload.
 xcaddy build via podman (cache hit on the second run, plugin present in the
 binary) and the DebOps group check.
 Not tested: DNS-01 against real providers and automatic DNS management.
+
+## License
+
+GPL-3.0-or-later. See `LICENSE`.
