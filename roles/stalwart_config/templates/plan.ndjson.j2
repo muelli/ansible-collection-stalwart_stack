@@ -3,7 +3,7 @@
 
 {#- Stage 0: listeners -#}
 {%- set listeners = {} -%}
-{%- for l in stalwart_server_listeners -%}
+{%- for l in stalwart_server_listeners if l.state | default('present', true) == 'present' -%}
 {%-   set binds = {} -%}
 {%-   for b in l.bind -%}{%- set _ = binds.update({b: true}) -%}{%- endfor -%}
 {#-   Stalwart models sets as {value: true}; accept plain lists for such options. -#}
@@ -18,6 +18,9 @@
 {%-     endif -%}
 {%-   endfor -%}
 {%-   set _ = listeners.update({l.name: ({'name': l.name, 'protocol': l.protocol, 'bind': binds} | combine(opts))}) -%}
+{%- endfor -%}
+{%- for l in stalwart_server_listeners if l.state | default('present', true) == 'absent' -%}
+{%-   set ops.list = ops.list + [{'@type': 'destroy', 'object': 'NetworkListener', 'value': {'name': l.name}}] -%}
 {%- endfor -%}
 {%- set ops.list = ops.list + [{'@type': 'upsert', 'object': 'NetworkListener', 'matchOn': ['name'], 'value': listeners}] -%}
 
@@ -37,6 +40,9 @@
 {%- endfor -%}
 
 {#- Stage 2: DNS providers, one per distinct provider in use -#}
+{%- for dns in stalwart_absent_dns_providers -%}
+{%-   set ops.list = ops.list + [{'@type': 'destroy', 'object': 'DnsServer', 'value': {'description': dns | capitalize}}] -%}
+{%- endfor -%}
 {%- set used = stalwart_domains | selectattr('state', 'equalto', 'present') | selectattr('dns', 'defined') | map(attribute='dns') | map('lower') | unique | list -%}
 {%- for dns in used -%}
 {%-   set provider = stalwart_dns_provider_map[dns] | default('') -%}
@@ -56,9 +62,6 @@
 {%- endfor -%}
 
 {#- Stage 3: certificates synced from Caddy -#}
-{%- for domain in stalwart_domains if domain.state == 'absent' -%}
-{%-   set ops.list = ops.list + [{'@type': 'destroy', 'object': 'Certificate', 'ids': ['certificate-' ~ (domain.name | replace('.', '-'))]}] -%}
-{%- endfor -%}
 {%- for domain in stalwart_domains if domain.state == 'present' -%}
 {%-   set slug = 'certificate-' ~ (domain.name | replace('.', '-')) -%}
 {%-   set ops.list = ops.list + [{
@@ -72,6 +75,10 @@
 {#- Stage 4: domains -#}
 {%- for domain in stalwart_domains if domain.state == 'absent' -%}
 {%-   set ops.list = ops.list + [{'@type': 'destroy', 'object': 'Domain', 'value': {'name': domain.name}}] -%}
+{%- endfor -%}
+{#- A Domain refers to its certificate, so the certificate goes after the Domain. -#}
+{%- for domain in stalwart_domains if domain.state == 'absent' -%}
+{%-   set ops.list = ops.list + [{'@type': 'destroy', 'object': 'Certificate', 'value': {'subjectAlternativeNames': domain.name}}] -%}
 {%- endfor -%}
 {%- for domain in stalwart_domains if domain.state == 'present' -%}
 {%-   set slug = 'certificate-' ~ (domain.name | replace('.', '-')) -%}

@@ -41,6 +41,40 @@
     - item.dns is defined
     - item.name in (sender_domain_routing | default([]) | rejectattr('state', 'equalto', 'absent') | map(attribute='domain') | list)
 
+- name: Check whether the server has been bootstrapped before
+  ansible.builtin.stat:
+    path: "{{ stalwart_config_dir }}/.bootstrapped"
+  register: stalwart_sentinel
+
+- name: Look up the server ids of domains that are to be removed
+  ansible.builtin.command:
+    argv: ["{{ stalwart_bin_dir }}/stalwart-cli", query, Domain, --where, "name={{ item.name }}", --fields, name, --json, --no-color]
+  environment:
+    STALWART_URL: "{{ stalwart_mgmt_url }}"
+    STALWART_USER: "{{ stalwart_admin_user }}"
+    STALWART_PASSWORD: "{{ stalwart_admin_password }}"
+  loop: "{{ stalwart_domains | selectattr('state', 'equalto', 'absent') | list }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: stalwart_absent_lookup
+  changed_when: false
+  failed_when: false
+  when: stalwart_sentinel.stat.exists
+
+- name: Remember the ids (Stalwart created DKIM keys that link to them)
+  ansible.builtin.set_fact:
+    stalwart_absent_domain_ids: >-
+      {% set d = {} %}{% for r in stalwart_absent_lookup.results | default([]) if r.rc | default(1) == 0 and r.stdout | default('') | length > 0 %}{% set _ = d.update({r.item.name: (r.stdout.splitlines()[0] | from_json).id}) %}{% endfor %}{{ d }}
+
+- name: Render the plan of destroys that have to come first
+  ansible.builtin.template:
+    src: plan-pre.ndjson.j2
+    dest: "{{ stalwart_config_dir }}/plan-pre.ndjson"
+    owner: root
+    group: root
+    mode: "0600"
+  register: stalwart_pre_plan
+
 - name: Render the declarative plan
   ansible.builtin.template:
     src: plan.ndjson.j2
@@ -53,14 +87,37 @@
   diff: false
   register: stalwart_plan
 
-- name: Check whether the server has been bootstrapped before
+- name: Read the checksum of the plan that was applied last
+  ansible.builtin.slurp:
+    src: "{{ stalwart_config_dir }}/.plan.applied"
+  register: stalwart_applied_plan
+  failed_when: false
+
+- name: Checksum the rendered plans
   ansible.builtin.stat:
-    path: "{{ stalwart_config_dir }}/.bootstrapped"
-  register: stalwart_sentinel
+    path: "{{ stalwart_config_dir }}/plan.ndjson"
+    checksum_algorithm: sha256
+  register: stalwart_plan_stat
 
 - name: Decide whether the plan has to be applied
   ansible.builtin.set_fact:
-    stalwart_apply_needed: "{{ stalwart_plan.changed or not stalwart_sentinel.stat.exists or stalwart_force_apply | bool }}"
+    stalwart_plan_checksum: "{{ stalwart_plan_stat.stat.checksum ~ '+' ~ (stalwart_pre_plan.checksum | default('')) }}"
+    stalwart_apply_needed: >-
+      {{ (stalwart_applied_plan.content | default('') | b64decode | trim) != (stalwart_plan_stat.stat.checksum ~ '+' ~ (stalwart_pre_plan.checksum | default('')))
+         or not stalwart_sentinel.stat.exists or stalwart_force_apply | bool }}
+
+- name: Apply the destroys that have to come first
+  ansible.builtin.command:
+    argv: ["{{ stalwart_bin_dir }}/stalwart-cli", apply, --file, "{{ stalwart_config_dir }}/plan-pre.ndjson", --quiet, --no-color]
+  environment:
+    STALWART_URL: "{{ stalwart_mgmt_url }}"
+    STALWART_USER: "{{ stalwart_admin_user }}"
+    STALWART_PASSWORD: "{{ stalwart_admin_password }}"
+  changed_when: true
+  when:
+    - stalwart_apply_needed | bool
+    - stalwart_sentinel.stat.exists
+    - stalwart_absent_domain_ids | length > 0
 
 - name: Apply the plan through the running management listener
   ansible.builtin.command:
@@ -145,6 +202,31 @@
         name: "{{ stalwart_recovery_unit }}"
         state: stopped
       failed_when: false
+
+    - name: Wait for the recovery port to be released
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: "{{ stalwart_recovery_port }}"
+        state: stopped
+        timeout: 30
+      failed_when: false
+
+    - name: Bring the regular service back even if the apply failed
+      ansible.builtin.systemd_service:
+        name: "{{ stalwart_service_name }}"
+        state: started
+      failed_when: false
+
+- name: Remember the applied plan
+  ansible.builtin.copy:
+    content: "{{ stalwart_plan_checksum }}\n"
+    dest: "{{ stalwart_config_dir }}/.plan.applied"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - stalwart_apply_needed | bool
+    - stalwart_apply_via_recovery | bool or (stalwart_apply_mgmt.rc | default(1)) == 0
 
 - name: Wait until the recovery port is released
   ansible.builtin.wait_for:

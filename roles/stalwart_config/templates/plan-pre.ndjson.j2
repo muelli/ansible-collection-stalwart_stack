@@ -1,0 +1,7 @@
+{#- Applied before the main plan: things that block destroying a domain. -#}
+{#- Stalwart creates DKIM keys per domain and they link to it. -#}
+{%- set ops = namespace(list=[]) -%}
+{%- for domain in stalwart_domains if domain.state == 'absent' and domain.name in stalwart_absent_domain_ids -%}
+{%-   set ops.list = ops.list + [{'@type': 'destroy', 'object': 'DkimSignature', 'value': {'domainId': stalwart_absent_domain_ids[domain.name]}}] -%}
+{%- endfor -%}
+{{ ops.list | map('to_json') | join('\n') }}
