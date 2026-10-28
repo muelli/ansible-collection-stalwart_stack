@@ -1,7 +1,7 @@
 ---
 - name: Work out what to build
   ansible.builtin.set_fact:
-    caddy_goarch: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}"
+    caddy_goarch: "{{ 'amd64' if ansible_facts.architecture == 'x86_64' else 'arm64' }}"
     caddy_build_withs: >-
       {{ (caddy_dns_plugins | map('regex_replace', '^', 'github.com/caddy-dns/') | list)
          + caddy_extra_modules + caddy_xcaddy_modules }}

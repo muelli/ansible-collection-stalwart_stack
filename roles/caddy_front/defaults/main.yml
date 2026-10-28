@@ -13,7 +13,7 @@ caddy_extra_modules: []
 
 # download: replace the whole URL (for example with a release of your own build).
 caddy_download_url: >-
-  https://caddyserver.com/api/download?os=linux&arch={{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}{% for m in (caddy_dns_plugins | map('regex_replace', '^', 'github.com/caddy-dns/') | list) + caddy_extra_modules %}&p={{ m }}{% endfor %}
+  https://caddyserver.com/api/download?os=linux&arch={{ 'amd64' if ansible_facts.architecture == 'x86_64' else 'arm64' }}{% for m in (caddy_dns_plugins | map('regex_replace', '^', 'github.com/caddy-dns/') | list) + caddy_extra_modules %}&p={{ m }}{% endfor %}
 
 # xcaddy: builds happen on the controller, nothing is installed on the target.
 # Each entry is what follows `--with`/`--replace` on the xcaddy command line, so

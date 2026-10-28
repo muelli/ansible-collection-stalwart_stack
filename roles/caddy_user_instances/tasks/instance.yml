@@ -12,8 +12,8 @@
 
 - name: Remember the account details
   ansible.builtin.set_fact:
-    _caddy_uid: "{{ getent_passwd[_caddy_user][1] }}"
-    _caddy_home: "{{ getent_passwd[_caddy_user][4] }}"
+    _caddy_uid: "{{ ansible_facts.getent_passwd[_caddy_user][1] }}"
+    _caddy_home: "{{ ansible_facts.getent_passwd[_caddy_user][4] }}"
 
 - name: Let the fronting Caddy join the primary group of the account
   ansible.builtin.user:

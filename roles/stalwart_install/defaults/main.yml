@@ -23,8 +23,8 @@ stalwart_cli_checksums:
     aarch64: "sha256:21133474b880c96836999464197728896f17e723a999690e7bf5d042323240d4"
 
 # Override when installing a version that is not in the tables above.
-stalwart_checksum: "{{ (stalwart_checksums[stalwart_version] | default({}))[ansible_architecture] | default('') }}"
-stalwart_cli_checksum: "{{ (stalwart_cli_checksums[stalwart_cli_version] | default({}))[ansible_architecture] | default('') }}"
+stalwart_checksum: "{{ (stalwart_checksums[stalwart_version] | default({}))[ansible_facts.architecture] | default('') }}"
+stalwart_cli_checksum: "{{ (stalwart_cli_checksums[stalwart_cli_version] | default({}))[ansible_facts.architecture] | default('') }}"
 
 # Optionally verify the sigstore bundle published next to the server tarball.
 # Needs the `cosign` binary on the target.

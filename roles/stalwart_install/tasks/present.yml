@@ -2,7 +2,7 @@
 - name: Check the target is supported and required variables are set
   ansible.builtin.assert:
     that:
-      - ansible_architecture in ['x86_64', 'aarch64']
+      - ansible_facts.architecture in ['x86_64', 'aarch64']
       - stalwart_admin_password is defined
       - stalwart_admin_password | length >= 12
       - stalwart_checksum | length > 0
@@ -10,7 +10,7 @@
     fail_msg: >-
       Unsupported architecture, missing/short stalwart_admin_password (>= 12 characters),
       or no checksum for stalwart {{ stalwart_version }} / stalwart-cli {{ stalwart_cli_version }}
-      on {{ ansible_architecture }}. Set stalwart_checksum and stalwart_cli_checksum for versions
+      on {{ ansible_facts.architecture }}. Set stalwart_checksum and stalwart_cli_checksum for versions
       that are not pinned in defaults/main.yml.
   no_log: true
 
@@ -54,15 +54,15 @@
 
 - name: Download the Stalwart server release
   ansible.builtin.get_url:
-    url: "https://github.com/stalwartlabs/stalwart/releases/download/v{{ stalwart_version }}/stalwart-{{ ansible_architecture }}-unknown-linux-gnu.tar.gz"
-    dest: "{{ stalwart_download_dir }}/stalwart-{{ stalwart_version }}-{{ ansible_architecture }}.tar.gz"
+    url: "https://github.com/stalwartlabs/stalwart/releases/download/v{{ stalwart_version }}/stalwart-{{ ansible_facts.architecture }}-unknown-linux-gnu.tar.gz"
+    dest: "{{ stalwart_download_dir }}/stalwart-{{ stalwart_version }}-{{ ansible_facts.architecture }}.tar.gz"
     checksum: "{{ stalwart_checksum }}"
     mode: "0644"
 
 - name: Download the Stalwart CLI release
   ansible.builtin.get_url:
-    url: "https://github.com/stalwartlabs/cli/releases/download/v{{ stalwart_cli_version }}/stalwart-cli-{{ ansible_architecture }}-unknown-linux-gnu.tar.xz"
-    dest: "{{ stalwart_download_dir }}/stalwart-cli-{{ stalwart_cli_version }}-{{ ansible_architecture }}.tar.xz"
+    url: "https://github.com/stalwartlabs/cli/releases/download/v{{ stalwart_cli_version }}/stalwart-cli-{{ ansible_facts.architecture }}-unknown-linux-gnu.tar.xz"
+    dest: "{{ stalwart_download_dir }}/stalwart-cli-{{ stalwart_cli_version }}-{{ ansible_facts.architecture }}.tar.xz"
     checksum: "{{ stalwart_cli_checksum }}"
     mode: "0644"
 
@@ -71,8 +71,8 @@
   block:
     - name: Download the sigstore bundle
       ansible.builtin.get_url:
-        url: "https://github.com/stalwartlabs/stalwart/releases/download/v{{ stalwart_version }}/stalwart-{{ ansible_architecture }}-unknown-linux-gnu.tar.gz.sigstore.json"
-        dest: "{{ stalwart_download_dir }}/stalwart-{{ stalwart_version }}-{{ ansible_architecture }}.tar.gz.sigstore.json"
+        url: "https://github.com/stalwartlabs/stalwart/releases/download/v{{ stalwart_version }}/stalwart-{{ ansible_facts.architecture }}-unknown-linux-gnu.tar.gz.sigstore.json"
+        dest: "{{ stalwart_download_dir }}/stalwart-{{ stalwart_version }}-{{ ansible_facts.architecture }}.tar.gz.sigstore.json"
         mode: "0644"
 
     - name: Run cosign verify-blob
@@ -81,17 +81,17 @@
           - cosign
           - verify-blob
           - --bundle
-          - "{{ stalwart_download_dir }}/stalwart-{{ stalwart_version }}-{{ ansible_architecture }}.tar.gz.sigstore.json"
+          - "{{ stalwart_download_dir }}/stalwart-{{ stalwart_version }}-{{ ansible_facts.architecture }}.tar.gz.sigstore.json"
           - --certificate-identity
           - "https://github.com/stalwartlabs/stalwart/.github/workflows/ci.yml@refs/tags/v{{ stalwart_version }}"
           - --certificate-oidc-issuer
           - https://token.actions.githubusercontent.com
-          - "{{ stalwart_download_dir }}/stalwart-{{ stalwart_version }}-{{ ansible_architecture }}.tar.gz"
+          - "{{ stalwart_download_dir }}/stalwart-{{ stalwart_version }}-{{ ansible_facts.architecture }}.tar.gz"
       changed_when: false
 
 - name: Unpack the Stalwart server
   ansible.builtin.unarchive:
-    src: "{{ stalwart_download_dir }}/stalwart-{{ stalwart_version }}-{{ ansible_architecture }}.tar.gz"
+    src: "{{ stalwart_download_dir }}/stalwart-{{ stalwart_version }}-{{ ansible_facts.architecture }}.tar.gz"
     dest: "{{ stalwart_bin_dir }}"
     remote_src: true
     include: [stalwart]
@@ -104,10 +104,10 @@
 
 - name: Unpack the Stalwart CLI
   ansible.builtin.unarchive:
-    src: "{{ stalwart_download_dir }}/stalwart-cli-{{ stalwart_cli_version }}-{{ ansible_architecture }}.tar.xz"
+    src: "{{ stalwart_download_dir }}/stalwart-cli-{{ stalwart_cli_version }}-{{ ansible_facts.architecture }}.tar.xz"
     dest: "{{ stalwart_bin_dir }}"
     remote_src: true
-    include: ["stalwart-cli-{{ ansible_architecture }}-unknown-linux-gnu/stalwart-cli"]
+    include: ["stalwart-cli-{{ ansible_facts.architecture }}-unknown-linux-gnu/stalwart-cli"]
     extra_opts: ["--strip-components=1"]
     owner: root
     group: root
