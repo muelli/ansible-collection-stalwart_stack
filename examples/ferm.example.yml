@@ -1,0 +1,24 @@
+---
+# DebOps/ferm rules for hosts in the `mailservers` group (copy to group_vars/mailservers/ferm.yml)
+# Firewall for hosts in the `mailservers` group (Stalwart + Caddy + Bulwark).
+# These ports used to be opened by DebOps' postfix, dovecot and apache roles;
+# a host in with_stalwart is no longer in their groups, so open them here.
+# ferm__dependent_rules is not used anywhere else in this inventory, so this
+# does not replace any other rule list.
+ferm__dependent_rules:
+  - name: stalwart-smtp
+    dport: ['25', '465', '587']
+    protocol: ['tcp']
+    type: 'accept'
+  - name: stalwart-imap
+    dport: ['143', '993']
+    protocol: ['tcp']
+    type: 'accept'
+  - name: stalwart-managesieve
+    dport: ['4190']
+    protocol: ['tcp']
+    type: 'accept'
+  - name: caddy-web
+    dport: ['80', '443']
+    protocol: ['tcp']
+    type: 'accept'
