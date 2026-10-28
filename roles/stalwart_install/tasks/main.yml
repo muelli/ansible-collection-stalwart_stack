@@ -1,0 +1,177 @@
+---
+- name: Check the target is supported and required variables are set
+  ansible.builtin.assert:
+    that:
+      - ansible_architecture in ['x86_64', 'aarch64']
+      - stalwart_admin_password is defined
+      - stalwart_admin_password | length >= 12
+      - stalwart_checksum | length > 0
+      - stalwart_cli_checksum | length > 0
+    fail_msg: >-
+      Unsupported architecture, missing/short stalwart_admin_password (>= 12 characters),
+      or no checksum for stalwart {{ stalwart_version }} / stalwart-cli {{ stalwart_cli_version }}
+      on {{ ansible_architecture }}. Set stalwart_checksum and stalwart_cli_checksum for versions
+      that are not pinned in defaults/main.yml.
+  no_log: true
+
+- name: Install packages needed to unpack the release archives
+  ansible.builtin.apt:
+    name: [ca-certificates, xz-utils, tar]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create the Stalwart group
+  ansible.builtin.group:
+    name: "{{ stalwart_system_group }}"
+    system: true
+
+- name: Create the Stalwart user
+  ansible.builtin.user:
+    name: "{{ stalwart_system_user }}"
+    group: "{{ stalwart_system_group }}"
+    home: "{{ stalwart_data_dir }}"
+    create_home: false
+    shell: /usr/sbin/nologin
+    system: true
+
+- name: Create Stalwart directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(stalwart_system_user) }}"
+    group: "{{ item.group | default(stalwart_system_group) }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ stalwart_config_dir }}", mode: "0750" }
+    - { path: "{{ stalwart_data_dir }}", mode: "0750" }
+    - { path: "{{ stalwart_log_dir }}", mode: "0750" }
+    - { path: "{{ stalwart_download_dir }}", mode: "0755", owner: root, group: root }
+    - { path: "{{ stalwart_marker_dir }}", mode: "0755", owner: root, group: root }
+
+- name: Download the Stalwart server release
+  ansible.builtin.get_url:
+    url: "https://github.com/stalwartlabs/stalwart/releases/download/v{{ stalwart_version }}/stalwart-{{ ansible_architecture }}-unknown-linux-gnu.tar.gz"
+    dest: "{{ stalwart_download_dir }}/stalwart-{{ stalwart_version }}-{{ ansible_architecture }}.tar.gz"
+    checksum: "{{ stalwart_checksum }}"
+    mode: "0644"
+
+- name: Download the Stalwart CLI release
+  ansible.builtin.get_url:
+    url: "https://github.com/stalwartlabs/cli/releases/download/v{{ stalwart_cli_version }}/stalwart-cli-{{ ansible_architecture }}-unknown-linux-gnu.tar.xz"
+    dest: "{{ stalwart_download_dir }}/stalwart-cli-{{ stalwart_cli_version }}-{{ ansible_architecture }}.tar.xz"
+    checksum: "{{ stalwart_cli_checksum }}"
+    mode: "0644"
+
+- name: Verify the sigstore bundle of the server release
+  when: stalwart_verify_sigstore | bool
+  block:
+    - name: Download the sigstore bundle
+      ansible.builtin.get_url:
+        url: "https://github.com/stalwartlabs/stalwart/releases/download/v{{ stalwart_version }}/stalwart-{{ ansible_architecture }}-unknown-linux-gnu.tar.gz.sigstore.json"
+        dest: "{{ stalwart_download_dir }}/stalwart-{{ stalwart_version }}-{{ ansible_architecture }}.tar.gz.sigstore.json"
+        mode: "0644"
+
+    - name: Run cosign verify-blob
+      ansible.builtin.command:
+        argv:
+          - cosign
+          - verify-blob
+          - --bundle
+          - "{{ stalwart_download_dir }}/stalwart-{{ stalwart_version }}-{{ ansible_architecture }}.tar.gz.sigstore.json"
+          - --certificate-identity
+          - "https://github.com/stalwartlabs/stalwart/.github/workflows/ci.yml@refs/tags/v{{ stalwart_version }}"
+          - --certificate-oidc-issuer
+          - https://token.actions.githubusercontent.com
+          - "{{ stalwart_download_dir }}/stalwart-{{ stalwart_version }}-{{ ansible_architecture }}.tar.gz"
+      changed_when: false
+
+- name: Unpack the Stalwart server
+  ansible.builtin.unarchive:
+    src: "{{ stalwart_download_dir }}/stalwart-{{ stalwart_version }}-{{ ansible_architecture }}.tar.gz"
+    dest: "{{ stalwart_bin_dir }}"
+    remote_src: true
+    include: [stalwart]
+    owner: root
+    group: root
+    mode: "0755"
+    creates: "{{ stalwart_marker_dir }}/server-{{ stalwart_version }}"
+  notify: Restart Stalwart
+  register: stalwart_unpacked
+
+- name: Unpack the Stalwart CLI
+  ansible.builtin.unarchive:
+    src: "{{ stalwart_download_dir }}/stalwart-cli-{{ stalwart_cli_version }}-{{ ansible_architecture }}.tar.xz"
+    dest: "{{ stalwart_bin_dir }}"
+    remote_src: true
+    include: ["stalwart-cli-{{ ansible_architecture }}-unknown-linux-gnu/stalwart-cli"]
+    extra_opts: ["--strip-components=1"]
+    owner: root
+    group: root
+    mode: "0755"
+    creates: "{{ stalwart_marker_dir }}/cli-{{ stalwart_cli_version }}"
+  register: stalwart_cli_unpacked
+
+- name: Record the installed versions
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: touch
+    owner: root
+    group: root
+    mode: "0644"
+    modification_time: preserve
+    access_time: preserve
+  loop:
+    - "{{ stalwart_marker_dir }}/server-{{ stalwart_version }}"
+    - "{{ stalwart_marker_dir }}/cli-{{ stalwart_cli_version }}"
+
+- name: Write the data store configuration
+  ansible.builtin.template:
+    src: config.json.j2
+    dest: "{{ stalwart_config_dir }}/config.json"
+    owner: "{{ stalwart_system_user }}"
+    group: "{{ stalwart_system_group }}"
+    mode: "0640"
+  notify: Restart Stalwart
+
+- name: Write the service environment file with the fallback administrator
+  ansible.builtin.template:
+    src: stalwart.env.j2
+    dest: "{{ stalwart_config_dir }}/stalwart.env"
+    owner: root
+    group: "{{ stalwart_system_group }}"
+    mode: "0640"
+  no_log: true
+  notify: Restart Stalwart
+
+- name: Write the CLI environment file
+  ansible.builtin.template:
+    src: cli.env.j2
+    dest: "{{ stalwart_cli_env_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Check whether the server has been bootstrapped before
+  ansible.builtin.stat:
+    path: "{{ stalwart_config_dir }}/.bootstrapped"
+  register: stalwart_sentinel_install
+
+- name: Remember the bootstrap state for handlers
+  ansible.builtin.set_fact:
+    stalwart_bootstrapped: "{{ stalwart_sentinel_install.stat.exists }}"
+
+- name: Install the systemd unit
+  ansible.builtin.template:
+    src: stalwart.service.j2
+    dest: "/etc/systemd/system/{{ stalwart_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd for Stalwart
+    - Restart Stalwart
+
+- name: Apply pending handlers before the configuration role runs
+  ansible.builtin.meta: flush_handlers

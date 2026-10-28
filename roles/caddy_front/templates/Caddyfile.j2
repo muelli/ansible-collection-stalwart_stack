@@ -1,0 +1,15 @@
+# Managed by Ansible (caddy_front).
+{
+    email {{ acme_email }}
+{% if caddy_tls_mode == 'internal' %}
+    local_certs
+    skip_install_trust
+{% else %}
+    acme_ca {{ acme_directory_url }}
+{%   if acme_ca_root_pem_path is defined %}
+    acme_ca_root {{ acme_ca_root_pem_path }}
+{%   endif %}
+{% endif %}
+}
+
+import {{ caddy_conf_dir }}/*.conf

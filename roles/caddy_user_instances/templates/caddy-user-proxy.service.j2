@@ -1,0 +1,12 @@
+# Managed by Ansible (caddy_user_instances).
+[Unit]
+Description=Idle proxy from the front socket to the Caddy of {{ _caddy_user }}
+Requires=caddy-user.service
+After=caddy-user.service
+# No StopWhenUnneeded here: a socket-activated unit is needed by nothing and
+# would be stopped right after starting. It ends itself via --exit-idle-time,
+# and caddy-user.service (StopWhenUnneeded) follows it.
+
+[Service]
+Type=notify
+ExecStart=/lib/systemd/systemd-socket-proxyd --exit-idle-time={{ caddy_user_idle_time }} %t/caddy-internal.sock

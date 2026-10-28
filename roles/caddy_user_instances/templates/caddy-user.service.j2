@@ -1,0 +1,12 @@
+# Managed by Ansible (caddy_user_instances).
+[Unit]
+Description=Caddy instance of {{ _caddy_user }}
+StopWhenUnneeded=yes
+
+[Service]
+Type=notify
+ExecStart={{ caddy_binary_path }} run --config %E/caddy/Caddyfile
+ExecReload={{ caddy_binary_path }} reload --config %E/caddy/Caddyfile --force
+TimeoutStopSec=5s
+LimitNOFILE=1048576
+LimitNPROC=512

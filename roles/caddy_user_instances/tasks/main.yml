@@ -1,0 +1,24 @@
+---
+- name: Create the shared socket directory now and after reboots
+  ansible.builtin.copy:
+    dest: /etc/tmpfiles.d/caddy-user-sockets.conf
+    content: "d {{ caddy_user_socket_dir }} 1777 root root -\n"
+    owner: root
+    group: root
+    mode: "0644"
+  register: caddy_user_tmpfiles
+
+- name: Create the socket directory
+  ansible.builtin.file:
+    path: "{{ caddy_user_socket_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "1777"
+
+- name: Configure each instance
+  ansible.builtin.include_tasks: instance.yml
+  loop: "{{ caddy_user_instances }}"
+  loop_control:
+    loop_var: caddy_user_item
+    label: "{{ caddy_user_item.name | default(caddy_user_item) }}"

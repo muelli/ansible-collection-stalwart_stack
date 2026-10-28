@@ -1,0 +1,12 @@
+---
+galaxy_info:
+  role_name: stalwart_install
+  description: Install pinned Stalwart server and stalwart-cli binaries, systemd unit and data store config
+  license: GPL-3.0-or-later
+  min_ansible_version: "2.16"
+  platforms:
+    - name: Debian
+      versions: [all]
+    - name: Ubuntu
+      versions: [all]
+dependencies: []

@@ -1,0 +1,13 @@
+# Managed by Ansible (caddy_user_instances).
+[Unit]
+Description=Front socket of the Caddy instance of {{ _caddy_user }}
+
+[Socket]
+ListenStream={{ caddy_user_socket_dir }}/%u.sock
+# The fronting Caddy reaches the socket through the group, nobody else can.
+SocketMode=0660
+SocketGroup={{ _caddy_user }}
+Service=caddy-user-proxy.service
+
+[Install]
+WantedBy=sockets.target

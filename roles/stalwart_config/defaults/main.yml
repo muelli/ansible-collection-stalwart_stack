@@ -1,0 +1,88 @@
+---
+# Needs stalwart_install on the same host. Written for Stalwart 1.0.x;
+# object and field names differ from 0.16 (for example Relay.host,
+# NetworkListener.implicitTls).
+
+# defaultHostname of the server (used in the SMTP greeting, MTA reports...).
+# stalwart_hostname: mail.example.org
+# Domain that SystemSettings.defaultDomainId points to. Defaults to the
+# first present entry of stalwart_domains.
+stalwart_default_domain: "{{ (stalwart_domains | selectattr('state', 'equalto', 'present') | map(attribute='name') | list | first) | default('') }}"
+
+stalwart_domains: []
+stalwart_relay_hosts: []
+sender_domain_routing: []
+dns_key_map: {}
+
+# Certificates are written to this directory by caddy_front.
+stalwart_certs_dir: /etc/stalwart/certs
+
+stalwart_config_dir: /etc/stalwart
+stalwart_bin_dir: /usr/local/bin
+stalwart_service_name: stalwart
+stalwart_admin_user: admin
+stalwart_mgmt_url: "http://127.0.0.1:8081"
+
+# Port of the temporary recovery instance used for the first apply.
+stalwart_recovery_port: 8080
+stalwart_recovery_unit: stalwart-recovery
+
+# Re-apply the plan even when it did not change.
+stalwart_force_apply: false
+
+# Loopback address of the HTTP listener Caddy talks to with PROXY protocol v2.
+stalwart_http_proxy_bind: "127.0.0.1:8008"
+stalwart_proxy_trusted_networks: ["127.0.0.1/32", "::1/128"]
+# SystemSettings.proxyTrustedNetworks applies to EVERY listener, including the
+# plain management listener, so it stays empty. Only the http-proxy listener
+# expects PROXY protocol, through its own overrideProxyTrustedNetworks.
+stalwart_global_proxy_trusted_networks: []
+
+# Loopback-only plain HTTP listener used by stalwart-cli after bootstrap.
+stalwart_mgmt_bind: "127.0.0.1:8081"
+
+stalwart_server_listeners:
+  - { name: smtp, protocol: smtp, bind: ["[::]:25"] }
+  - { name: submission, protocol: smtp, bind: ["[::]:587"], options: { useTls: true } }
+  - { name: submissions, protocol: smtp, bind: ["[::]:465"], options: { implicitTls: true } }
+  - { name: imap, protocol: imap, bind: ["[::]:143"], options: { useTls: true } }
+  - { name: imaps, protocol: imap, bind: ["[::]:993"], options: { implicitTls: true } }
+  - { name: sieve, protocol: manageSieve, bind: ["[::]:4190"], options: { useTls: true } }
+  - name: http-proxy
+    protocol: http
+    bind: ["{{ stalwart_http_proxy_bind }}"]
+    options:
+      overrideProxyTrustedNetworks: "{{ stalwart_proxy_trusted_networks }}"
+  - { name: mgmt, protocol: http, bind: ["{{ stalwart_mgmt_bind }}"] }
+
+# Extra operations appended verbatim to the generated plan.
+stalwart_additional_plan: []
+
+# Mapping from the provider key used in `dns:` to the Stalwart DnsServer type
+# and from the Caddy credential names in dns_key_map to Stalwart field names.
+stalwart_dns_provider_map:
+  gandi: GandiV5
+  hetzner: Hetzner
+  spaceship: Spaceship
+  porkbun: Porkbun
+  ovh: Ovh
+  dnsimple: Dnsimple
+
+stalwart_dns_field_meta:
+  gandi:
+    bearer_token: { name: secret, type: SecretKey }
+  hetzner:
+    api_token: { name: secret, type: SecretKey }
+  spaceship:
+    apikey: { name: apiKey, type: String }
+    apisecret: { name: secret, type: SecretKey }
+  porkbun:
+    api_key: { name: apiKey, type: String }
+    api_secret: { name: secretApiKey, type: SecretKey }
+  ovh:
+    application_key: { name: applicationKey, type: String }
+    application_secret: { name: applicationSecret, type: SecretKey }
+    consumer_key: { name: consumerKey, type: SecretKey }
+  dnsimple:
+    auth_token: { name: authToken, type: SecretKey }
+    account_id: { name: accountIdentifier, type: String }

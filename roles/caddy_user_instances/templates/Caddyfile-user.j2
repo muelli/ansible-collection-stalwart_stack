@@ -1,0 +1,16 @@
+# Managed by Ansible (caddy_user_instances).
+{
+    # Admin API on a UNIX socket in the user's runtime directory.
+    admin "unix//{$XDG_RUNTIME_DIR}/caddy-admin.sock"
+    auto_https off
+}
+
+{% for site in _caddy_user_sites %}
+{{ site.hosts | map('regex_replace', '^', 'http://') | join(', ') }} {
+    bind unix//{$XDG_RUNTIME_DIR}/caddy-internal.sock
+{% if site.directive | default('') | length > 0 %}
+{{ site.directive | indent(4, true) }}
+{% endif %}
+}
+
+{% endfor %}

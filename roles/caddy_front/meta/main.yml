@@ -1,0 +1,7 @@
+---
+galaxy_info:
+  role_name: caddy_front
+  description: Caddy as the single TLS terminator for Stalwart's web endpoints, per-user Caddy instances and plain sites, with certificate sync to Stalwart
+  license: GPL-3.0-or-later
+  min_ansible_version: "2.16"
+dependencies: []

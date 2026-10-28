@@ -1,0 +1,105 @@
+{#- Builds the declarative plan. One JSON operation per line. -#}
+{%- set ops = namespace(list=[]) -%}
+
+{#- Stage 0: listeners -#}
+{%- set listeners = {} -%}
+{%- for l in stalwart_server_listeners -%}
+{%-   set binds = {} -%}
+{%-   for b in l.bind -%}{%- set _ = binds.update({b: true}) -%}{%- endfor -%}
+{#-   Stalwart models sets as {value: true}; accept plain lists for such options. -#}
+{%-   set opts = {} -%}
+{%-   for key, val in (l.options | default({})).items() -%}
+{%-     if val is sequence and val is not string and val is not mapping -%}
+{%-       set as_set = {} -%}
+{%-       for e in val -%}{%- set _ = as_set.update({e: true}) -%}{%- endfor -%}
+{%-       set _ = opts.update({key: as_set}) -%}
+{%-     else -%}
+{%-       set _ = opts.update({key: val}) -%}
+{%-     endif -%}
+{%-   endfor -%}
+{%-   set _ = listeners.update({l.name: ({'name': l.name, 'protocol': l.protocol, 'bind': binds} | combine(opts))}) -%}
+{%- endfor -%}
+{%- set ops.list = ops.list + [{'@type': 'upsert', 'object': 'NetworkListener', 'matchOn': ['name'], 'value': listeners}] -%}
+
+{#- Stage 1: outbound relays (MtaRoute) -#}
+{%- for route in stalwart_relay_hosts if route.state | default('present', true) == 'absent' -%}
+{%-   set ops.list = ops.list + [{'@type': 'destroy', 'object': 'MtaRoute', 'value': {'name': route.name}}] -%}
+{%- endfor -%}
+{%- for route in stalwart_relay_hosts if route.state | default('present', true) == 'present' -%}
+{%-   set fields = {
+        '@type': 'Relay', 'name': route.name, 'host': route.address, 'port': route.port | default(25) | int,
+        'protocol': route.protocol | default('smtp') | lower, 'implicitTls': route.implicit_tls | default(false) | bool,
+        'allowInvalidCerts': route.allow_invalid_certs | default(false) | bool, 'description': route.description | default(none)
+      } -%}
+{%-   if route.auth_username is defined -%}{%- set _ = fields.update({'authUsername': route.auth_username}) -%}{%- endif -%}
+{%-   if route.auth_secret is defined -%}{%- set _ = fields.update({'authSecret': {'@type': 'Value', 'secret': route.auth_secret}}) -%}{%- endif -%}
+{%-   set ops.list = ops.list + [{'@type': 'upsert', 'object': 'MtaRoute', 'matchOn': ['name'], 'value': {'route-' ~ route.name: fields}}] -%}
+{%- endfor -%}
+
+{#- Stage 2: DNS providers, one per distinct provider in use -#}
+{%- set used = stalwart_domains | selectattr('state', 'equalto', 'present') | selectattr('dns', 'defined') | map(attribute='dns') | map('lower') | unique | list -%}
+{%- for dns in used -%}
+{%-   set provider = stalwart_dns_provider_map[dns] | default('') -%}
+{%-   set creds = dns_key_map[dns] | default({}) -%}
+{%-   if provider and creds | length > 0 -%}
+{%-     set fields = {'@type': provider, 'description': dns | capitalize, 'timeout': 30000} -%}
+{%-     for key, val in creds.items() -%}
+{%-       set rule = (stalwart_dns_field_meta[dns] | default({}))[key] | default({}) -%}
+{%-       if rule.type | default('String') == 'SecretKey' -%}
+{%-         set _ = fields.update({rule.name | default(key): {'@type': 'Value', 'secret': val}}) -%}
+{%-       else -%}
+{%-         set _ = fields.update({rule.name | default(key): val}) -%}
+{%-       endif -%}
+{%-     endfor -%}
+{%-     set ops.list = ops.list + [{'@type': 'upsert', 'object': 'DnsServer', 'matchOn': ['description'], 'value': {'dns-' ~ dns: fields}}] -%}
+{%-   endif -%}
+{%- endfor -%}
+
+{#- Stage 3: certificates synced from Caddy -#}
+{%- for domain in stalwart_domains if domain.state == 'absent' -%}
+{%-   set ops.list = ops.list + [{'@type': 'destroy', 'object': 'Certificate', 'ids': ['certificate-' ~ (domain.name | replace('.', '-'))]}] -%}
+{%- endfor -%}
+{%- for domain in stalwart_domains if domain.state == 'present' -%}
+{%-   set slug = 'certificate-' ~ (domain.name | replace('.', '-')) -%}
+{%-   set ops.list = ops.list + [{
+        '@type': 'upsert', 'object': 'Certificate', 'matchOn': ['subjectAlternativeNames'],
+        'value': {slug: {
+          'certificate': {'@type': 'File', 'filePath': stalwart_certs_dir ~ '/' ~ domain.name ~ '.crt'},
+          'privateKey': {'@type': 'File', 'filePath': stalwart_certs_dir ~ '/' ~ domain.name ~ '.key'},
+          'subjectAlternativeNames': {domain.name: true}}}}] -%}
+{%- endfor -%}
+
+{#- Stage 4: domains -#}
+{%- for domain in stalwart_domains if domain.state == 'absent' -%}
+{%-   set ops.list = ops.list + [{'@type': 'destroy', 'object': 'Domain', 'value': {'name': domain.name}}] -%}
+{%- endfor -%}
+{%- for domain in stalwart_domains if domain.state == 'present' -%}
+{%-   set slug = 'certificate-' ~ (domain.name | replace('.', '-')) -%}
+{%-   set dns_mgmt = {'@type': 'Automatic', 'dnsServerId': '#dns-' ~ (domain.dns | lower)} if domain.dns is defined else {'@type': 'Manual'} -%}
+{%-   set ops.list = ops.list + [{
+        '@type': 'upsert', 'object': 'Domain', 'matchOn': ['name'],
+        'value': {'domain-' ~ (domain.name | replace('.', '-')): {
+          'name': domain.name,
+          'certificateManagement': {'@type': 'Manual', 'certificateId': '#' ~ slug},
+          'dnsManagement': dns_mgmt}}}] -%}
+{%- endfor -%}
+
+{#- Stage 5: system settings -#}
+{%- set trusted = {} -%}
+{%- for net in stalwart_global_proxy_trusted_networks -%}{%- set _ = trusted.update({net: true}) -%}{%- endfor -%}
+{%- set settings = {'proxyTrustedNetworks': trusted} -%}
+{%- if stalwart_hostname is defined -%}{%- set _ = settings.update({'defaultHostname': stalwart_hostname}) -%}{%- endif -%}
+{%- if stalwart_default_domain | length > 0 -%}{%- set _ = settings.update({'defaultDomainId': '#domain-' ~ (stalwart_default_domain | replace('.', '-'))}) -%}{%- endif -%}
+{%- set ops.list = ops.list + [{'@type': 'update', 'object': 'SystemSettings', 'value': settings}] -%}
+
+{#- Stage 6: sender-domain based outbound routing -#}
+{%- set match = {'0': {'if': 'is_local_domain(rcpt_domain)', 'then': "'local'"}} -%}
+{%- set idx = namespace(n=1) -%}
+{%- for rule in sender_domain_routing if rule.state | default('present', true) == 'present' -%}
+{%-   set _ = match.update({idx.n | string: {'if': "sender_domain == '" ~ rule.domain ~ "'", 'then': "'" ~ rule.route ~ "'"}}) -%}
+{%-   set idx.n = idx.n + 1 -%}
+{%- endfor -%}
+{%- set ops.list = ops.list + [{'@type': 'update', 'object': 'MtaOutboundStrategy', 'id': 'singleton', 'value': {'route': {'match': match, 'else': "'mx'"}}}] -%}
+
+{%- set ops.list = ops.list + stalwart_additional_plan -%}
+{{ ops.list | map('to_json') | join('\n') }}

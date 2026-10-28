@@ -1,4 +1,0 @@
-{% for domain in mail_domains %}
-{"type": "{{ 'create' if domain.state == 'present' else 'delete' }}", "object": "Domain", "id": "{{ domain.name }}", "properties": {"name": "{{ domain.name }}", "acme": false}}
-{"type": "{{ 'create' if domain.state == 'present' else 'delete' }}", "object": "Certificate", "id": "cert-{{ domain.name }}", "properties": {"certificate": {"type": "file", "path": "{{ stalwart_certs_dir }}/{{ domain.name }}.crt"}, "privateKey": {"type": "file", "path": "{{ stalwart_certs_dir }}/{{ domain.name }}.key"}}}
-{% endfor %}

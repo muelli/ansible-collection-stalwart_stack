@@ -1,0 +1,54 @@
+---
+# Copy to inventory/group_vars/all.yml (untracked) and fill in. Put every
+# secret into an Ansible vault (ansible-vault encrypt_string) or a file that
+# is not committed.
+
+stalwart_hostname: mail.example.org
+stalwart_admin_user: admin
+stalwart_admin_password: "{{ vault_stalwart_admin_password }}"   # >= 12 characters
+
+# Domains served by Stalwart: Caddy fronts their web side and owns their certificates.
+stalwart_domains:
+  - name: mail.example.org
+    state: present
+    dns: hetzner            # key into dns_key_map; omit for HTTP-01 / manual DNS
+  - name: old.example.org
+    state: absent
+
+# Other sites. `user:` forwards to that user's own Caddy.
+caddy_domains:
+  - name: www.example.org
+    state: present
+    dns: hetzner
+    caddy_directive: |
+      respond "Hello" 200
+  - name: alice.example.org
+    state: present
+    dns: hetzner
+    user: alice
+
+caddy_dns_plugins: [hetzner]
+
+dns_key_map:
+  hetzner:
+    api_token: "{{ vault_hetzner_api_token }}"
+
+# Per-user Caddy instances.
+caddy_user_instances:
+  - name: alice
+    sites:
+      - hosts: [alice.example.org]
+        directive: |
+          respond "Hello from alice" 200
+
+stalwart_relay_hosts:
+  - name: examplerelay
+    address: relay.example.net
+    port: 587
+    protocol: smtp
+    auth_username: relayuser
+    auth_secret: "{{ vault_relay_secret }}"
+
+sender_domain_routing:
+  - domain: bar.example
+    route: examplerelay

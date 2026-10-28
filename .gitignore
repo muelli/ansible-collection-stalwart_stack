@@ -1,0 +1,6 @@
+# Real inventories and secrets stay out of the repository.
+/inventory/
+/hosts.ini
+/secrets.yml
+*.vault
+.vault_pass

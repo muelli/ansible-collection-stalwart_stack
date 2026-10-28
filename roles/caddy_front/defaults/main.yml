@@ -1,0 +1,66 @@
+---
+# --- Binary -----------------------------------------------------------------
+# Caddy is fetched from the official build service so DNS-01 plugins can be
+# compiled in. caddy_dns_plugins are names below github.com/caddy-dns/,
+# caddy_extra_modules are complete module paths (for example your own fork).
+caddy_dns_plugins: []
+caddy_extra_modules: []
+# Replace the whole URL (for example with a release of your own build).
+caddy_download_url: >-
+  https://caddyserver.com/api/download?os=linux&arch={{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}{% for m in (caddy_dns_plugins | map('regex_replace', '^', 'github.com/caddy-dns/') | list) + caddy_extra_modules %}&p={{ m }}{% endfor %}
+caddy_binary_path: /usr/local/bin/caddy
+caddy_marker_dir: /usr/local/share/caddy-front
+
+caddy_user: caddy
+caddy_group: caddy
+caddy_home: /var/lib/caddy
+caddy_config_dir: /etc/caddy
+caddy_conf_dir: /etc/caddy/conf.d
+
+# --- TLS --------------------------------------------------------------------
+# acme: certificates from acme_directory_url (DNS-01 when a domain sets `dns`)
+# internal: Caddy's own local CA, for tests and lab setups
+caddy_tls_mode: acme
+acme_directory_url: https://acme-v02.api.letsencrypt.org/directory
+acme_email: "admin@{{ (stalwart_domains | selectattr('state', 'equalto', 'present') | map(attribute='name') | list | first) | default('example.invalid') }}"
+# acme_ca_root_pem_path: /etc/ssl/certs/pebble.pem
+caddy_storage_dir: "{{ caddy_home }}/.local/share/caddy"
+acme_host_slug: "{{ acme_directory_url | regex_replace('^https?://', '') | regex_replace('/.*$', '') }}-directory"
+caddy_issuer_dir: "{{ 'local' if caddy_tls_mode == 'internal' else acme_host_slug }}"
+caddy_certs_dir: "{{ caddy_storage_dir }}/certificates/{{ caddy_issuer_dir }}"
+
+# --- Sites ------------------------------------------------------------------
+# stalwart_domains: names served by Stalwart (web UI/JMAP behind PROXY v2, and
+# their certificate is copied to Stalwart for the mail ports).
+#   - { name: mail.example.org, state: present, dns: hetzner, caddy_directive: "..." }
+# caddy_domains: further sites. Give `user: alice` to forward to alice's own
+# Caddy over /run/caddy-user-sockets/alice.sock, or a caddy_directive.
+stalwart_domains: []
+caddy_domains: []
+dns_key_map: {}
+caddy_user_socket_dir: /run/caddy-user-sockets
+
+stalwart_http_proxyv2_listener: "127.0.0.1:8008"
+stalwart_certs_dir: /etc/stalwart/certs
+stalwart_user: stalwart
+stalwart_group: stalwart
+stalwart_bin_dir: /usr/local/bin
+stalwart_cli_env_file: /etc/stalwart/cli.env
+stalwart_service_name: stalwart
+
+# How long to wait for the first certificate of a Stalwart domain.
+caddy_cert_wait_timeout: 180
+
+# Per-provider details for the Caddy DNS plugins.
+caddy_dns_field_map:
+  gandi: { layout: anonymous }
+  hetzner: { layout: anonymous }
+  spaceship:
+    layout: block
+    fields: { apikey: api_key, apisecret: api_secret }
+  ovh:
+    layout: block
+    fields:
+      application_key: application_key
+      application_secret: application_secret
+      consumer_key: consumer_key

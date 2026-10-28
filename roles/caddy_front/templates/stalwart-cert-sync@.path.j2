@@ -1,0 +1,9 @@
+# Managed by Ansible (caddy_front).
+[Unit]
+Description=Watch Caddy certificate renewal for %i
+
+[Path]
+PathChanged={{ caddy_certs_dir }}/%i/%i.crt
+
+[Install]
+WantedBy=multi-user.target

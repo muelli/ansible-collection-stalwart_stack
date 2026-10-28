@@ -1,0 +1,161 @@
+---
+- name: Check required variables
+  ansible.builtin.assert:
+    that:
+      - stalwart_admin_password is defined
+      - stalwart_hostname is defined
+    fail_msg: stalwart_admin_password and stalwart_hostname must be set.
+  no_log: true
+
+- name: Check that every certificate the plan references exists
+  ansible.builtin.stat:
+    path: "{{ stalwart_certs_dir }}/{{ item.name }}.{{ ext }}"
+  loop: "{{ stalwart_domains | selectattr('state', 'equalto', 'present') | list }}"
+  loop_control:
+    label: "{{ item.name }}"
+  vars:
+    ext: crt
+  register: stalwart_cert_stats
+
+- name: Fail when a referenced certificate is missing
+  ansible.builtin.fail:
+    msg: >-
+      {{ item.stat.path }} does not exist. Run the caddy_front role first so Caddy obtains
+      the certificate and the cert-sync unit copies it.
+  loop: "{{ stalwart_cert_stats.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when: not item.stat.exists
+
+- name: Reject relay and routing combinations that break SPF
+  ansible.builtin.fail:
+    msg: >-
+      Domain '{{ item.name }}' sends through an external relay (sender_domain_routing) but also
+      has automatic DNS management ('dns: {{ item.dns }}'). Stalwart would overwrite its SPF record
+      with the local address. Remove 'dns' for that domain and manage its records manually.
+  loop: "{{ stalwart_domains }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - item.state | default('present', true) == 'present'
+    - item.dns is defined
+    - item.name in (sender_domain_routing | default([]) | rejectattr('state', 'equalto', 'absent') | map(attribute='domain') | list)
+
+- name: Render the declarative plan
+  ansible.builtin.template:
+    src: plan.ndjson.j2
+    dest: "{{ stalwart_config_dir }}/plan.ndjson"
+    owner: root
+    group: root
+    mode: "0600"
+  # The plan carries DNS and relay secrets, so keep it out of the log and diff.
+  no_log: true
+  diff: false
+  register: stalwart_plan
+
+- name: Check whether the server has been bootstrapped before
+  ansible.builtin.stat:
+    path: "{{ stalwart_config_dir }}/.bootstrapped"
+  register: stalwart_sentinel
+
+- name: Decide whether the plan has to be applied
+  ansible.builtin.set_fact:
+    stalwart_apply_needed: "{{ stalwart_plan.changed or not stalwart_sentinel.stat.exists or stalwart_force_apply | bool }}"
+
+- name: Apply the plan through the running management listener
+  ansible.builtin.command:
+    argv: ["{{ stalwart_bin_dir }}/stalwart-cli", apply, --file, "{{ stalwart_config_dir }}/plan.ndjson", --quiet, --no-color]
+  environment:
+    STALWART_URL: "{{ stalwart_mgmt_url }}"
+    STALWART_USER: "{{ stalwart_admin_user }}"
+    STALWART_PASSWORD: "{{ stalwart_admin_password }}"
+  register: stalwart_apply_mgmt
+  changed_when: stalwart_apply_mgmt.rc == 0
+  failed_when: false
+  when:
+    - stalwart_apply_needed | bool
+    - stalwart_sentinel.stat.exists
+
+- name: Decide whether the recovery instance is needed
+  ansible.builtin.set_fact:
+    stalwart_apply_via_recovery: "{{ stalwart_apply_needed | bool and (not stalwart_sentinel.stat.exists or (stalwart_apply_mgmt.rc | default(1)) != 0) }}"
+
+- name: Report why the management listener could not be used
+  ansible.builtin.debug:
+    msg: "{{ (stalwart_apply_mgmt.stderr | default('') ~ ' ' ~ stalwart_apply_mgmt.stdout | default('')) | trim }}"
+  when:
+    - stalwart_apply_via_recovery | bool
+    - stalwart_sentinel.stat.exists
+
+- name: Bootstrap or repair through a temporary recovery instance
+  when:
+    - stalwart_apply_needed | bool
+    - stalwart_apply_via_recovery | bool
+  block:
+    - name: Stop the regular service
+      ansible.builtin.systemd_service:
+        name: "{{ stalwart_service_name }}"
+        state: stopped
+      failed_when: false
+
+    - name: Start Stalwart in recovery mode
+      ansible.builtin.command:
+        argv:
+          - systemd-run
+          - "--unit={{ stalwart_recovery_unit }}"
+          - --collect
+          - "--uid={{ stalwart_system_user | default('stalwart') }}"
+          - "--gid={{ stalwart_system_group | default('stalwart') }}"
+          - --setenv=STALWART_RECOVERY_MODE=1
+          - "--setenv=STALWART_RECOVERY_MODE_PORT={{ stalwart_recovery_port }}"
+          - "--setenv=STALWART_RECOVERY_ADMIN={{ stalwart_admin_user }}:{{ stalwart_admin_password }}"
+          - "{{ stalwart_bin_dir }}/stalwart"
+          - --config
+          - "{{ stalwart_config_dir }}/config.json"
+      no_log: true
+      changed_when: true
+
+    - name: Wait for the recovery listener
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: "{{ stalwart_recovery_port }}"
+        timeout: 60
+
+    - name: Apply the plan through the recovery instance
+      ansible.builtin.command:
+        argv: ["{{ stalwart_bin_dir }}/stalwart-cli", apply, --file, "{{ stalwart_config_dir }}/plan.ndjson", --quiet, --no-color]
+      environment:
+        STALWART_URL: "http://127.0.0.1:{{ stalwart_recovery_port }}"
+        STALWART_USER: "{{ stalwart_admin_user }}"
+        STALWART_PASSWORD: "{{ stalwart_admin_password }}"
+      changed_when: true
+
+    - name: Mark the deployment as bootstrapped
+      ansible.builtin.file:
+        path: "{{ stalwart_config_dir }}/.bootstrapped"
+        state: touch
+        owner: root
+        group: root
+        mode: "0644"
+        modification_time: preserve
+        access_time: preserve
+  always:
+    - name: Make sure the recovery instance is gone
+      ansible.builtin.systemd_service:
+        name: "{{ stalwart_recovery_unit }}"
+        state: stopped
+      failed_when: false
+
+- name: Wait until the recovery port is released
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ stalwart_recovery_port }}"
+    state: stopped
+    timeout: 30
+  when: stalwart_apply_via_recovery | bool
+
+- name: Start and enable the Stalwart service
+  ansible.builtin.systemd_service:
+    name: "{{ stalwart_service_name }}"
+    state: started
+    enabled: "{{ stalwart_service_enabled | default(true) }}"

@@ -1,0 +1,60 @@
+---
+# Pinned versions. The server and the CLI have to match, so upgrade them
+# together. The sha256 sums below are the digests GitHub publishes for the
+# release assets; an unlisted version fails unless you provide
+# stalwart_checksum / stalwart_cli_checksum yourself.
+stalwart_version: "1.0.0"
+stalwart_cli_version: "1.0.14"
+
+stalwart_checksums:
+  "1.0.0":
+    x86_64: "sha256:433a00fc67e85e6eda4729954352a67bfc639c02502de421a69364e86b989a94"
+    aarch64: "sha256:98e4ecd9dea8bbb5e0f8a807921a1f5f1f67a94f70e58801e90999bb63f4c9d0"
+  "0.16.27":
+    x86_64: "sha256:3d4548053e7130cdc6288134e28aecc5004f22549cc52a1dbda0ca48ff0b301a"
+    aarch64: "sha256:215301c8449e3bf8efd4c39cd557dc65dc37ec5bedab47f15c22ef24631100d7"
+
+stalwart_cli_checksums:
+  "1.0.14":
+    x86_64: "sha256:78584b238422b0201a7bd223ed95b3c1a7fb8735ad3fa8c884d818a66fd1bc65"
+    aarch64: "sha256:a30f0c1a0fb8a7ee8bc42fd0e699802e4c51257a53dbd681c4d91ddb6759792b"
+  "1.0.12":
+    x86_64: "sha256:e2bb054509aaac311f13ff4f9e09c38c607195de2e9735cf84cfc6ee4776a5a2"
+    aarch64: "sha256:21133474b880c96836999464197728896f17e723a999690e7bf5d042323240d4"
+
+# Override when installing a version that is not in the tables above.
+stalwart_checksum: "{{ (stalwart_checksums[stalwart_version] | default({}))[ansible_architecture] | default('') }}"
+stalwart_cli_checksum: "{{ (stalwart_cli_checksums[stalwart_cli_version] | default({}))[ansible_architecture] | default('') }}"
+
+# Optionally verify the sigstore bundle published next to the server tarball.
+# Needs the `cosign` binary on the target.
+stalwart_verify_sigstore: false
+
+stalwart_system_user: stalwart
+stalwart_system_group: stalwart
+
+stalwart_bin_dir: /usr/local/bin
+stalwart_config_dir: /etc/stalwart
+stalwart_data_dir: /var/lib/stalwart
+stalwart_log_dir: /var/log/stalwart
+stalwart_download_dir: /var/cache/stalwart-install
+stalwart_marker_dir: /usr/local/share/stalwart-install
+
+# The only setting kept on disk; everything else lives in the database and
+# is managed by the stalwart_config role.
+stalwart_data_store:
+  "@type": RocksDb
+  path: "{{ stalwart_data_dir }}"
+
+# Recovery/fallback administrator. It bootstraps the first plan and is used
+# by the CLI afterwards. Define the password in a vault or an untracked file;
+# there is deliberately no default.
+stalwart_admin_user: admin
+# stalwart_admin_password: <required>
+
+# Where the CLI reaches the management listener created by stalwart_config.
+stalwart_mgmt_url: "http://127.0.0.1:8081"
+stalwart_cli_env_file: "{{ stalwart_config_dir }}/cli.env"
+
+stalwart_service_name: stalwart
+stalwart_service_enabled: true

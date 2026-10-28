@@ -1,8 +1,14 @@
 ---
-- name: Apply Caddy and Stalwart Lifecycles
+# Order matters: Caddy has to obtain the certificates before the Stalwart
+# plan references them, and the per-user sockets need the fronting Caddy.
+- name: Stalwart mail server behind Caddy
   hosts: mailservers
   become: true
-  
+  # A failed run must still restart Caddy after a group change, or the next
+  # run would see no change and never restart it.
+  force_handlers: true
   roles:
-    - role: caddy_fronting_stalwart
-
+    - stalwart_install
+    - caddy_front
+    - caddy_user_instances
+    - stalwart_config

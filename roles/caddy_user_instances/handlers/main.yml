@@ -1,0 +1,5 @@
+---
+- name: Restart the fronting Caddy for new group memberships
+  ansible.builtin.systemd_service:
+    name: caddy
+    state: restarted

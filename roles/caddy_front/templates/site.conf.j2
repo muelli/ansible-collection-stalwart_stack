@@ -1,0 +1,31 @@
+{% import 'macros.j2' as macros with context %}
+# Managed by Ansible (caddy_front).
+{{ item.name }} {
+{% if item.caddy_directive is defined and item.caddy_directive | length > 0 %}
+{{ item.caddy_directive | indent(4, true) }}
+
+{% endif %}
+{% if item.user is defined %}
+    handle {
+        reverse_proxy unix/{{ caddy_user_socket_dir }}/{{ item.user }}.sock
+    }
+{% elif item.kind == 'stalwart' %}
+    handle {
+        reverse_proxy {{ stalwart_http_proxyv2_listener }} {
+            transport http {
+                proxy_protocol v2
+            }
+        }
+    }
+{% endif %}
+{% if caddy_tls_mode == 'internal' %}
+
+    tls internal
+{% elif item.dns is defined %}
+
+    tls {
+{{ macros.render_caddy_dns(item.dns, dns_key_map, caddy_dns_field_map) | indent(8, true) }}
+        propagation_delay 30s
+    }
+{% endif %}
+}

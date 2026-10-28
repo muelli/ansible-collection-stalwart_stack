@@ -1,0 +1,12 @@
+# Managed by Ansible (caddy_front).
+[Unit]
+Description=Copy the Caddy certificate for %i to Stalwart and reload it
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/install -o {{ stalwart_user }} -g {{ stalwart_group }} -m 0644 {{ caddy_certs_dir }}/%i/%i.crt {{ stalwart_certs_dir }}/%i.crt
+ExecStart=/usr/bin/install -o {{ stalwart_user }} -g {{ stalwart_group }} -m 0600 {{ caddy_certs_dir }}/%i/%i.key {{ stalwart_certs_dir }}/%i.key
+EnvironmentFile={{ stalwart_cli_env_file }}
+# Tell a running Stalwart to reload its certificates; ignore failures while it is stopped.
+ExecStart=-{{ stalwart_bin_dir }}/stalwart-cli create Action/ReloadTlsCertificates --json {}

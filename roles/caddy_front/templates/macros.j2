@@ -1,0 +1,13 @@
+{% macro render_caddy_dns(dns_provider, dns_key_map, caddy_dns_field_map) %}
+{% set creds = dns_key_map[dns_provider] | default({}) %}
+{% set meta = caddy_dns_field_map[dns_provider] | default({}) %}
+{% if meta.layout | default('block') == 'anonymous' %}
+dns {{ dns_provider }} "{env.{{ dns_provider | upper }}_{{ (creds.keys() | list | first) | upper }}}"
+{% else %}
+dns {{ dns_provider }} {
+{%   for key in creds %}
+    {{ (meta.fields | default({}))[key] | default(key) }} "{env.{{ dns_provider | upper }}_{{ key | upper }}}"
+{%   endfor %}
+}
+{% endif %}
+{% endmacro %}

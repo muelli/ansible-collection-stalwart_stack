@@ -1,0 +1,119 @@
+---
+- name: Resolve the instance settings
+  ansible.builtin.set_fact:
+    _caddy_user: "{{ caddy_user_item.name | default(caddy_user_item) }}"
+    _caddy_user_sites: "{{ caddy_user_item.sites | default([{'hosts': [(caddy_user_item.name | default(caddy_user_item)) ~ '.invalid'], 'directive': 'respond \"Caddy of ' ~ (caddy_user_item.name | default(caddy_user_item)) ~ ' is alive\" 200'}]) }}"
+    _caddy_user_file: "{{ caddy_user_item.caddyfile | default('') }}"
+
+- name: Look up the account
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ _caddy_user }}"
+
+- name: Remember the account details
+  ansible.builtin.set_fact:
+    _caddy_uid: "{{ getent_passwd[_caddy_user][1] }}"
+    _caddy_home: "{{ getent_passwd[_caddy_user][4] }}"
+
+- name: Let the fronting Caddy join the primary group of the account
+  ansible.builtin.user:
+    name: "{{ caddy_front_user }}"
+    groups: "{{ _caddy_user }}"
+    append: true
+  notify: Restart the fronting Caddy for new group memberships
+
+- name: Keep the user manager running without a login session
+  ansible.builtin.command:
+    argv: [loginctl, enable-linger, "{{ _caddy_user }}"]
+    creates: "/var/lib/systemd/linger/{{ _caddy_user }}"
+
+- name: Create the configuration directories of the account
+  ansible.builtin.file:
+    path: "{{ _caddy_home }}/{{ item }}"
+    state: directory
+    owner: "{{ _caddy_user }}"
+    group: "{{ _caddy_user }}"
+    mode: "0750"
+  loop:
+    - .config
+    - .config/caddy
+    - .config/systemd
+    - .config/systemd/user
+
+- name: Write the generated Caddyfile
+  ansible.builtin.template:
+    src: Caddyfile-user.j2
+    dest: "{{ _caddy_home }}/.config/caddy/Caddyfile"
+    owner: "{{ _caddy_user }}"
+    group: "{{ _caddy_user }}"
+    mode: "0644"
+  when: _caddy_user_file | length == 0
+  register: caddy_user_caddyfile_generated
+
+- name: Copy the supplied Caddyfile
+  ansible.builtin.copy:
+    src: "{{ _caddy_user_file }}"
+    dest: "{{ _caddy_home }}/.config/caddy/Caddyfile"
+    owner: "{{ _caddy_user }}"
+    group: "{{ _caddy_user }}"
+    mode: "0644"
+  when: _caddy_user_file | length > 0
+  register: caddy_user_caddyfile_copied
+
+- name: Write the user units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "{{ _caddy_home }}/.config/systemd/user/{{ item }}"
+    owner: "{{ _caddy_user }}"
+    group: "{{ _caddy_user }}"
+    mode: "0644"
+  loop:
+    - caddy-user.socket
+    - caddy-user-proxy.service
+    - caddy-user.service
+  register: caddy_user_units
+
+- name: Wait for the user manager
+  ansible.builtin.wait_for:
+    path: "/run/user/{{ _caddy_uid }}/bus"
+    timeout: 30
+
+- name: Enable and start the front socket
+  ansible.builtin.systemd_service:
+    name: caddy-user.socket
+    scope: user
+    state: "{{ 'restarted' if caddy_user_units.changed else 'started' }}"
+    enabled: true
+    daemon_reload: true
+  become: true
+  become_user: "{{ _caddy_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ _caddy_uid }}"
+
+- name: Reload a running instance after a Caddyfile change
+  ansible.builtin.command:
+    argv: [systemctl, --user, try-reload-or-restart, caddy-user.service]
+  become: true
+  become_user: "{{ _caddy_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ _caddy_uid }}"
+  changed_when: true
+  when: caddy_user_caddyfile_generated.changed | default(false) or caddy_user_caddyfile_copied.changed | default(false)
+
+- name: Request a page through the front socket
+  ansible.builtin.command:
+    argv:
+      - curl
+      - --silent
+      - --show-error
+      - --max-time
+      - "20"
+      - --unix-socket
+      - "{{ caddy_user_socket_dir }}/{{ _caddy_user }}.sock"
+      - --header
+      - "Host: {{ _caddy_user_sites[0].hosts[0] }}"
+      - http://localhost/
+  register: caddy_user_smoke
+  changed_when: false
+  when: caddy_user_smoke_test | bool
+  failed_when: caddy_user_smoke.rc != 0 or caddy_user_smoke.stdout | length == 0

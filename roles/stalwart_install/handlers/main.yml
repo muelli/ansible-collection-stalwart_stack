@@ -1,0 +1,10 @@
+---
+- name: Reload systemd for Stalwart
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Restart Stalwart
+  ansible.builtin.systemd_service:
+    name: "{{ stalwart_service_name }}"
+    state: restarted
+  when: stalwart_bootstrapped | default(false) | bool
