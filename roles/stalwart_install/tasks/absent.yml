@@ -1,0 +1,47 @@
+---
+- name: Stop and disable Stalwart
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  loop: ["{{ stalwart_service_name }}", "{{ stalwart_recovery_unit | default('stalwart-recovery') }}"]
+  register: stalwart_stop_result
+  failed_when:
+    - stalwart_stop_result.failed | default(false)
+    - "'Could not find the requested service' not in (stalwart_stop_result.msg | default(''))"
+
+- name: Remove the unit, binaries, environment files and markers
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/etc/systemd/system/{{ stalwart_service_name }}.service"
+    - "{{ stalwart_bin_dir }}/stalwart"
+    - "{{ stalwart_bin_dir }}/stalwart-cli"
+    - "{{ stalwart_config_dir }}/stalwart.env"
+    - "{{ stalwart_cli_env_file }}"
+    - "{{ stalwart_marker_dir }}"
+    - "{{ stalwart_download_dir }}"
+
+- name: Remove configuration, data, logs and the account
+  when: stalwart_purge_data | bool
+  block:
+    - name: Remove the directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop: ["{{ stalwart_config_dir }}", "{{ stalwart_data_dir }}", "{{ stalwart_log_dir }}"]
+
+    - name: Remove the account
+      ansible.builtin.user:
+        name: "{{ stalwart_system_user }}"
+        state: absent
+
+    - name: Remove the group
+      ansible.builtin.group:
+        name: "{{ stalwart_system_group }}"
+        state: absent
+
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true

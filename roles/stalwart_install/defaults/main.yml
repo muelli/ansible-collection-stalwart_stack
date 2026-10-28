@@ -74,3 +74,9 @@ stalwart_debops_service_groups:
   dovecot: dovecot
   rspamd: rspamd
   opendkim: opendkim
+
+# --- Removal ----------------------------------------------------------------
+# absent stops the service and removes unit, binaries, environment files and
+# markers. The data (mail, database, config.json) stays unless stalwart_purge_data.
+stalwart_install_state: present
+stalwart_purge_data: false
