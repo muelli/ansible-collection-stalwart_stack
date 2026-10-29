@@ -51,6 +51,7 @@ caddy_conf_dir: /etc/caddy/conf.d
 # acme: certificates from acme_directory_url (DNS-01 when a domain sets `dns`)
 # internal: Caddy's own local CA, for tests and lab setups
 caddy_tls_mode: acme
+# https://acme-staging-v02.api.letsencrypt.org/directory
 acme_directory_url: https://acme-v02.api.letsencrypt.org/directory
 acme_email: "admin@{{ (stalwart_domains | selectattr('state', 'equalto', 'present') | map(attribute='name') | list | first) | default('example.invalid') }}"
 # acme_ca_root_pem_path: /etc/ssl/certs/pebble.pem
