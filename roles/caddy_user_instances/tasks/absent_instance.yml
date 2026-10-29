@@ -6,13 +6,13 @@
   failed_when: false
 
 - name: Remove the instance of an existing account
-  when: (getent_passwd | default({}))[caddy_user_item.name] | default(none) is not none
+  when: (ansible_facts.getent_passwd | default({}))[caddy_user_item.name] | default(none) is not none
   block:
     - name: Remember the account details
       ansible.builtin.set_fact:
         _caddy_user: "{{ caddy_user_item.name }}"
-        _caddy_uid: "{{ getent_passwd[caddy_user_item.name][1] }}"
-        _caddy_home: "{{ getent_passwd[caddy_user_item.name][4] }}"
+        _caddy_uid: "{{ ansible_facts.getent_passwd[caddy_user_item.name][1] }}"
+        _caddy_home: "{{ ansible_facts.getent_passwd[caddy_user_item.name][4] }}"
 
     - name: Check whether the user manager is running
       ansible.builtin.stat:

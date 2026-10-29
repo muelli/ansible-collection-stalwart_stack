@@ -3,10 +3,13 @@
 # together. The sha256 sums below are the digests GitHub publishes for the
 # release assets; an unlisted version fails unless you provide
 # stalwart_checksum / stalwart_cli_checksum yourself.
-stalwart_version: "1.0.0"
+stalwart_version: "1.0.1"
 stalwart_cli_version: "1.0.14"
 
 stalwart_checksums:
+  "1.0.1":
+    x86_64: "sha256:aabae69bcdeff31e305d60f3ecb059fdb203116c0077d81560bf6d6f0f757d75"
+    aarch64: "sha256:36612d5c4e7c11b23a87b205c9341be08eb49c71515d4720854e1864b7e4c5b5"
   "1.0.0":
     x86_64: "sha256:433a00fc67e85e6eda4729954352a67bfc639c02502de421a69364e86b989a94"
     aarch64: "sha256:98e4ecd9dea8bbb5e0f8a807921a1f5f1f67a94f70e58801e90999bb63f4c9d0"
@@ -23,8 +26,8 @@ stalwart_cli_checksums:
     aarch64: "sha256:21133474b880c96836999464197728896f17e723a999690e7bf5d042323240d4"
 
 # Override when installing a version that is not in the tables above.
-stalwart_checksum: "{{ (stalwart_checksums[stalwart_version] | default({}))[ansible_architecture] | default('') }}"
-stalwart_cli_checksum: "{{ (stalwart_cli_checksums[stalwart_cli_version] | default({}))[ansible_architecture] | default('') }}"
+stalwart_checksum: "{{ (stalwart_checksums[stalwart_version] | default({}))[ansible_facts.architecture] | default('') }}"
+stalwart_cli_checksum: "{{ (stalwart_cli_checksums[stalwart_cli_version] | default({}))[ansible_facts.architecture] | default('') }}"
 
 # Optionally verify the sigstore bundle published next to the server tarball.
 # Needs the `cosign` binary on the target.

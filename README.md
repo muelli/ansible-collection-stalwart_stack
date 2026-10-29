@@ -76,6 +76,15 @@ on x86_64 or aarch64 with systemd.
   modules too: a new plugin release can require a newer Caddy and the build
   fails.
 
+## Firewall
+
+The roles do not touch the firewall (it differs per site). Open these TCP ports
+on a host that runs them: 25, 465, 587 (SMTP), 143, 993 (IMAP), 4190
+(ManageSieve), 80 and 443 (Caddy). With DebOps, put them into
+`group_vars/mailservers/` of the DebOps inventory, as `ferm__dependent_rules`
+(see `examples/ferm.example.yml`); that variable is not used by DebOps' own
+mail roles, so it does not replace other rule lists.
+
 ## Bulwark webmail
 
 The `bulwark` role runs the full Bulwark edition as a podman container through a
