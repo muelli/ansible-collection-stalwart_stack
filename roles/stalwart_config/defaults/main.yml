@@ -61,6 +61,13 @@ stalwart_server_listeners:
       overrideProxyTrustedNetworks: "{{ stalwart_proxy_trusted_networks }}"
   - { name: mgmt, protocol: http, bind: ["{{ stalwart_mgmt_bind }}"] }
 
+# Whether third-party web apps (Bulwark, ...) may sign in through OAuth using an
+# HTTPS URL as client_id (a Client ID Metadata Document). One of
+# disabled | sameDomain | any. sameDomain accepts documents served from the
+# same registrable domain as Stalwart; apps served by Stalwart itself are
+# always accepted.
+stalwart_oidc_client_metadata_documents: sameDomain
+
 # Extra operations appended verbatim to the generated plan.
 stalwart_additional_plan: []
 

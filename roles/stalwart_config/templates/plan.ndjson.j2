@@ -99,6 +99,8 @@
 {%- if stalwart_default_domain | length > 0 -%}{%- set _ = settings.update({'defaultDomainId': '#domain-' ~ (stalwart_default_domain | replace('.', '-'))}) -%}{%- endif -%}
 {%- set ops.list = ops.list + [{'@type': 'update', 'object': 'SystemSettings', 'value': settings}] -%}
 
+{%- set ops.list = ops.list + [{'@type': 'update', 'object': 'OidcProvider', 'id': 'singleton', 'value': {'clientMetadataDocuments': stalwart_oidc_client_metadata_documents}}] -%}
+
 {#- Stage 6: sender-domain based outbound routing -#}
 {%- set match = {'0': {'if': 'is_local_domain(rcpt_domain)', 'then': "'local'"}} -%}
 {%- set idx = namespace(n=1) -%}
