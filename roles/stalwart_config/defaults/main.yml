@@ -80,15 +80,15 @@ stalwart_dns_field_meta:
   hetzner:
     api_token: { name: secret, type: SecretKey }
   spaceship:
-    apikey: { name: apiKey, type: String }
+    apikey: { name: apiKeyId, type: String }
     apisecret: { name: secret, type: SecretKey }
   porkbun:
-    api_key: { name: apiKey, type: String }
-    api_secret: { name: secretApiKey, type: SecretKey }
+    api_key: { name: apiKeyId, type: String }
+    api_secret: { name: secret, type: SecretKey }
   ovh:
     application_key: { name: applicationKey, type: String }
     application_secret: { name: applicationSecret, type: SecretKey }
     consumer_key: { name: consumerKey, type: SecretKey }
   dnsimple:
-    auth_token: { name: authToken, type: SecretKey }
+    auth_token: { name: token, type: SecretKey }
     account_id: { name: accountIdentifier, type: String }
