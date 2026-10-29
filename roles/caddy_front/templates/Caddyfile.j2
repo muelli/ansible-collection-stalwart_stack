@@ -1,6 +1,9 @@
 # Managed by Ansible (caddy_front).
 {
     email {{ acme_email }}
+{% if caddy_debug | bool %}
+    debug
+{% endif %}
 {% if caddy_tls_mode == 'internal' %}
     local_certs
     skip_install_trust

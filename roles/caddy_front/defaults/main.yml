@@ -78,6 +78,9 @@ stalwart_bin_dir: /usr/local/bin
 stalwart_cli_env_file: /etc/stalwart/cli.env
 stalwart_service_name: stalwart
 
+# Verbose Caddy log (ACME and DNS challenge details); see `journalctl -u caddy`.
+caddy_debug: false
+
 # How long to wait for the first certificate of a Stalwart domain.
 caddy_cert_wait_timeout: 180
 

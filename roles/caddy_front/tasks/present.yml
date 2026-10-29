@@ -157,13 +157,58 @@
   register: stalwart_local_certs
 
 - name: Wait for Caddy to obtain missing certificates
-  ansible.builtin.wait_for:
-    path: "{{ caddy_certs_dir }}/{{ item.item.name }}/{{ item.item.name }}.crt"
-    timeout: "{{ caddy_cert_wait_timeout }}"
-  loop: "{{ stalwart_local_certs.results }}"
-  loop_control:
-    label: "{{ item.item.name }}"
-  when: not item.stat.exists
+  block:
+    - name: Wait for the certificate files
+      ansible.builtin.wait_for:
+        path: "{{ caddy_certs_dir }}/{{ item.item.name }}/{{ item.item.name }}.crt"
+        timeout: "{{ caddy_cert_wait_timeout }}"
+      loop: "{{ stalwart_local_certs.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when: not item.stat.exists
+  rescue:
+    - name: Find this run of the Caddy service in the journal
+      ansible.builtin.command:
+        argv: [systemctl, show, caddy, --property=InvocationID, --value]
+      register: caddy_invocation
+      changed_when: false
+      failed_when: false
+
+    - name: Collect the Caddy log of this run
+      ansible.builtin.command:
+        argv: >-
+          {{ ['journalctl', '--no-pager', '-o', 'cat', '--lines=3000']
+             + (['_SYSTEMD_INVOCATION_ID=' ~ (caddy_invocation.stdout | trim)] if caddy_invocation.stdout | trim | length > 0 else ['-u', 'caddy']) }}
+      register: caddy_failure_log
+      changed_when: false
+      failed_when: false
+
+    - name: Pick the last certificate error per name from the log
+      ansible.builtin.set_fact:
+        caddy_cert_errors: >-
+          {% set d = {} %}{% for l in caddy_failure_log.stdout_lines %}{% if l is match('^[{].*[}]$') %}{% set j = l | from_json %}{% if j.identifier is defined and j.error is defined and j.level | default('') in ['error', 'warn', 'warning'] %}{% set _ = d.update({j.identifier: (j.error | string | regex_replace('^.*?(HTTP [0-9]+ )', '\\1') | truncate(500))}) %}{% endif %}{% endif %}{% endfor %}{{ d }}
+        caddy_other_problems: >-
+          {% set out = [] %}{% for l in caddy_failure_log.stdout_lines %}{% if l is match('^[{].*[}]$') %}{% set j = l | from_json %}{% if j.level | default('') in ['warn', 'warning', 'error', 'fatal', 'panic'] and j.identifier is not defined and j.msg | default('') not in ['will retry', 'job failed', 'could not get certificate from issuer'] %}{% set _ = out.append(('%H:%M:%S' | strftime(j.ts | default(0) | int)) ~ ' ' ~ j.level ~ ' ' ~ j.logger | default('') ~ ': ' ~ j.msg | default('') ~ (' - ' ~ (j.error | string | truncate(300)) if j.error is defined else '')) %}{% endif %}{% endif %}{% endfor %}{{ (out | unique | list)[-10:] }}
+
+    - name: Fail with the reason per missing certificate
+      ansible.builtin.fail:
+        msg: |-
+          Caddy did not produce a certificate within {{ caddy_cert_wait_timeout }}s. Last error per name:
+          {% for r in stalwart_local_certs.results | rejectattr('stat.exists') %}
+            {{ r.item.name }}: {{ caddy_cert_errors[r.item.name] | default('nothing logged; check that the name is served by Caddy and read the journal') }}
+          {% endfor %}
+          {% if caddy_other_problems | length > 0 %}
+          Other warnings and errors from Caddy:
+          {% for l in caddy_other_problems %}
+            {{ l }}
+          {% endfor %}
+          {% endif %}
+          Full log: journalctl -u caddy on {{ inventory_hostname }} (caddy_debug: true adds ACME and DNS challenge details).
+          Common causes:
+          * DNS-01 (`dns:` set): wrong or missing credentials in dns_key_map, or the DNS plugin was not built in
+            (caddy_dns_plugins / caddy_xcaddy_modules)
+          * HTTP-01 / TLS-ALPN-01 (no `dns:`): the name does not resolve to this host, or ports 80/443 are not reachable
+          * the ACME server rejected the name or rate-limited it (acme_directory_url can point at the staging CA)
 
 - name: Copy the first certificates to Stalwart
   ansible.builtin.copy:
