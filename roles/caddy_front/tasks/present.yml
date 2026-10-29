@@ -71,11 +71,22 @@
     mode: "0644"
   notify: Reload Caddy
 
+- name: Work out the subdomain sites of the Stalwart domains
+  ansible.builtin.set_fact:
+    caddy_stalwart_subdomain_sites: >-
+      {%- set out = [] -%}
+      {%- for d in stalwart_domains -%}
+      {%- for s in d.subdomains | default(stalwart_subdomains) -%}
+      {%- set _ = out.append(d | combine({'name': s ~ '.' ~ d.name, 'parent': d.name, 'kind': 'stalwart', 'caddy_directive': ''})) -%}
+      {%- endfor -%}
+      {%- endfor -%}
+      {{ out }}
+
 - name: Remove the site files of absent domains
   ansible.builtin.file:
     path: "{{ caddy_conf_dir }}/{{ item.name }}.conf"
     state: absent
-  loop: "{{ stalwart_domains + caddy_domains }}"
+  loop: "{{ stalwart_domains + caddy_stalwart_subdomain_sites + caddy_domains }}"
   loop_control:
     label: "{{ item.name }}"
   when: item.state | default('present') == 'absent'
@@ -88,7 +99,8 @@
     owner: root
     group: root
     mode: "0644"
-  loop: "{{ stalwart_domains | selectattr('state', 'equalto', 'present') | map('combine', {'kind': 'stalwart'}) | list }}"
+  loop: "{{ (stalwart_domains | selectattr('state', 'equalto', 'present') | map('combine', {'kind': 'stalwart'}) | list)
+            + (caddy_stalwart_subdomain_sites | selectattr('state', 'equalto', 'present') | list) }}"
   loop_control:
     label: "{{ item.name }}"
   notify: Reload Caddy

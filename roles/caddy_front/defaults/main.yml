@@ -67,6 +67,15 @@ caddy_certs_dir: "{{ caddy_storage_dir }}/certificates/{{ caddy_issuer_dir }}"
 # caddy_domains: further sites. Give `user: alice` to forward to alice's own
 # Caddy over /run/caddy-user-sockets/alice.sock, or a caddy_directive.
 stalwart_domains: []
+# Subdomains of every Stalwart domain that clients look up over HTTPS: the
+# MTA-STS policy, Thunderbird autoconfig and Outlook autodiscover. Each gets
+# its own Caddy site and certificate and is forwarded to Stalwart. Override
+# per domain with `subdomains: [...]`, or `subdomains: []` for none.
+stalwart_subdomains: [mta-sts, autoconfig, autodiscover]
+# Always forward /.well-known/* of a Stalwart domain to Stalwart (JMAP,
+# CalDAV/CardDAV discovery), ahead of a custom caddy_directive such as a
+# static landing page.
+stalwart_wellknown_passthrough: true
 caddy_domains: []
 dns_key_map: {}
 caddy_user_socket_dir: /run/caddy-user-sockets

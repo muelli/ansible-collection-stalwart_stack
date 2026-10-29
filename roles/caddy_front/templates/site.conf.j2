@@ -1,6 +1,16 @@
 {% import 'macros.j2' as macros with context %}
 # Managed by Ansible (caddy_front).
 {{ item.name }} {
+{% if item.kind == 'stalwart' and item.parent is not defined and stalwart_wellknown_passthrough | bool %}
+    handle /.well-known/* {
+        reverse_proxy {{ stalwart_http_proxyv2_listener }} {
+            transport http {
+                proxy_protocol v2
+            }
+        }
+    }
+
+{% endif %}
 {% if item.caddy_directive is defined and item.caddy_directive | length > 0 %}
 {{ item.caddy_directive | indent(4, true) }}
 
