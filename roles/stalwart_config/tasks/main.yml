@@ -196,6 +196,22 @@
         mode: "0644"
         modification_time: preserve
         access_time: preserve
+  rescue:
+    - name: Read the log of the recovery instance
+      ansible.builtin.command:
+        argv: [journalctl, -u, "{{ stalwart_recovery_unit }}", --no-pager, -o, cat, --since=-10min]
+      register: stalwart_recovery_log
+      changed_when: false
+      failed_when: false
+
+    - name: Fail with the log of the recovery instance
+      ansible.builtin.fail:
+        msg: |-
+          Bootstrapping through the recovery instance failed. Log of {{ stalwart_recovery_unit }}:
+          {% for l in stalwart_recovery_log.stdout_lines | map('regex_replace', '\\x1b\\[[0-9;]*m', '') | select | unique | list %}
+            {{ l | truncate(400) }}
+          {% endfor %}
+          More: journalctl -u {{ stalwart_recovery_unit }} -u {{ stalwart_service_name }} on {{ inventory_hostname }}
   always:
     - name: Make sure the recovery instance is gone
       ansible.builtin.systemd_service:

@@ -83,3 +83,7 @@ stalwart_debops_service_groups:
 # markers. The data (mail, database, config.json) stays unless stalwart_purge_data.
 stalwart_install_state: present
 stalwart_purge_data: false
+
+# By default the role refuses a non-empty data directory it did not bootstrap
+# (for example the store of an older Stalwart). Set true to use it anyway.
+stalwart_allow_existing_data: false
