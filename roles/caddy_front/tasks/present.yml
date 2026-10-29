@@ -62,15 +62,6 @@
   no_log: true
   notify: Restart Caddy
 
-- name: Write the Caddyfile
-  ansible.builtin.template:
-    src: Caddyfile.j2
-    dest: "{{ caddy_config_dir }}/Caddyfile"
-    owner: root
-    group: root
-    mode: "0644"
-  notify: Reload Caddy
-
 - name: Work out the subdomain sites of the Stalwart domains
   ansible.builtin.set_fact:
     caddy_stalwart_subdomain_sites: >-
@@ -81,6 +72,57 @@
       {%- endfor -%}
       {%- endfor -%}
       {{ out }}
+
+- name: Work out which Stalwart domains get a wildcard certificate
+  ansible.builtin.set_fact:
+    # Needs DNS-01, so a `dns:` provider (or the internal CA).
+    caddy_wildcard_parents: >-
+      {{ stalwart_domains | selectattr('state', 'equalto', 'present') | selectattr('wildcard', 'defined') | selectattr('wildcard')
+         | selectattr('dns', 'defined') | map(attribute='name') | list
+         if caddy_tls_mode != 'internal' else
+         stalwart_domains | selectattr('state', 'equalto', 'present') | selectattr('wildcard', 'defined') | selectattr('wildcard')
+         | map(attribute='name') | list }}
+
+- name: Work out which Caddy certificate serves each Stalwart name
+  ansible.builtin.set_fact:
+    # name -> directory name in Caddy's certificate storage. A name one label
+    # below a wildcard domain is served by that domain's wildcard certificate.
+    caddy_cert_source: >-
+      {%- set src = {} -%}
+      {%- set names = (stalwart_domains | selectattr('state', 'equalto', 'present') | map(attribute='name') | list)
+                      + (caddy_stalwart_subdomain_sites | selectattr('state', 'equalto', 'present') | map(attribute='name') | list) -%}
+      {%- for n in names -%}
+      {%- set ns = namespace(v=n) -%}
+      {%- for p in caddy_wildcard_parents -%}
+      {%- if n.endswith('.' ~ p) and (n.split('.') | length) == (p.split('.') | length) + 1 -%}{%- set ns.v = 'wildcard_.' ~ p -%}{%- endif -%}
+      {%- endfor -%}
+      {%- set _ = src.update({n: ns.v}) -%}
+      {%- endfor -%}
+      {{ src }}
+
+- name: Collect the sites each wildcard certificate serves
+  ansible.builtin.set_fact:
+    caddy_wildcard_members: >-
+      {%- set out = {} -%}
+      {%- for p in caddy_wildcard_parents -%}
+      {%- set _ = out.update({p: []}) -%}
+      {%- endfor -%}
+      {%- for d in stalwart_domains | selectattr('state', 'equalto', 'present') | map('combine', {'kind': 'stalwart'}) -%}
+      {%- if caddy_cert_source[d.name].startswith('wildcard_.') -%}{%- set _ = out[caddy_cert_source[d.name][10:]].append(d) -%}{%- endif -%}
+      {%- endfor -%}
+      {%- for d in caddy_stalwart_subdomain_sites | selectattr('state', 'equalto', 'present') -%}
+      {%- if caddy_cert_source[d.name].startswith('wildcard_.') -%}{%- set _ = out[caddy_cert_source[d.name][10:]].append(d) -%}{%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+
+- name: Write the Caddyfile
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: "{{ caddy_config_dir }}/Caddyfile"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Caddy
 
 - name: Remove the site files of absent domains
   ansible.builtin.file:
@@ -99,10 +141,38 @@
     owner: root
     group: root
     mode: "0644"
-  loop: "{{ (stalwart_domains | selectattr('state', 'equalto', 'present') | map('combine', {'kind': 'stalwart'}) | list)
-            + (caddy_stalwart_subdomain_sites | selectattr('state', 'equalto', 'present') | list) }}"
+  loop: "{{ ((stalwart_domains | selectattr('state', 'equalto', 'present') | map('combine', {'kind': 'stalwart'}) | list)
+            + (caddy_stalwart_subdomain_sites | selectattr('state', 'equalto', 'present') | list))
+            | rejectattr('name', 'in', caddy_cert_source | dict2items | selectattr('value', 'match', '^wildcard_') | map(attribute='key') | list) | list }}"
   loop_control:
     label: "{{ item.name }}"
+  notify: Reload Caddy
+
+- name: Remove the own site files of names served by a wildcard certificate
+  ansible.builtin.file:
+    path: "{{ caddy_conf_dir }}/{{ item }}.conf"
+    state: absent
+  loop: "{{ caddy_cert_source | dict2items | selectattr('value', 'match', '^wildcard_') | map(attribute='key') | list }}"
+  notify: Reload Caddy
+
+- name: Write the wildcard site files
+  ansible.builtin.template:
+    src: wildcard.conf.j2
+    dest: "{{ caddy_conf_dir }}/_wildcard.{{ item }}.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ caddy_wildcard_parents }}"
+  notify: Reload Caddy
+
+- name: Remove the wildcard site files that are no longer wanted
+  ansible.builtin.file:
+    path: "{{ caddy_conf_dir }}/_wildcard.{{ item.name }}.conf"
+    state: absent
+  loop: "{{ stalwart_domains }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: item.name not in caddy_wildcard_parents
   notify: Reload Caddy
 
 - name: Write the site files of other domains
@@ -135,6 +205,31 @@
   loop:
     - stalwart-cert-sync@.service
     - stalwart-cert-sync@.path
+  notify: Reload systemd for Caddy
+
+- name: Create or remove the drop-in directories of the sync units
+  ansible.builtin.file:
+    path: "/etc/systemd/system/stalwart-cert-sync@{{ item.0.name }}.{{ item.1 }}.d"
+    state: "{{ 'directory' if caddy_cert_source[item.0.name].startswith('wildcard_') else 'absent' }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ stalwart_domains | selectattr('state', 'equalto', 'present') | product(['service', 'path']) | list }}"
+  loop_control:
+    label: "{{ item.0.name }}.{{ item.1 }}"
+  notify: Reload systemd for Caddy
+
+- name: Point the sync units of wildcard-covered names at the wildcard certificate
+  ansible.builtin.template:
+    src: "stalwart-cert-sync-wildcard.{{ item.1 }}.conf.j2"
+    dest: "/etc/systemd/system/stalwart-cert-sync@{{ item.0.name }}.{{ item.1 }}.d/wildcard.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ stalwart_domains | selectattr('state', 'equalto', 'present') | product(['service', 'path']) | list }}"
+  loop_control:
+    label: "{{ item.0.name }}.{{ item.1 }}"
+  when: caddy_cert_source[item.0.name].startswith('wildcard_')
   notify: Reload systemd for Caddy
 
 - name: Look for other services on the HTTP and HTTPS ports
@@ -180,7 +275,7 @@
   block:
     - name: Wait for the certificate files
       ansible.builtin.wait_for:
-        path: "{{ caddy_certs_dir }}/{{ item }}/{{ item }}.crt"
+        path: "{{ caddy_certs_dir }}/{{ caddy_cert_source[item] }}/{{ caddy_cert_source[item] }}.crt"
         timeout: "{{ caddy_cert_wait_timeout }}"
       loop: "{{ caddy_names_to_wait }}"
   rescue:
@@ -209,7 +304,7 @@
 
     - name: Check which certificates are still missing
       ansible.builtin.stat:
-        path: "{{ caddy_certs_dir }}/{{ item }}/{{ item }}.crt"
+        path: "{{ caddy_certs_dir }}/{{ caddy_cert_source[item] }}/{{ caddy_cert_source[item] }}.crt"
       loop: "{{ caddy_names_to_wait }}"
       register: caddy_still_missing
 
@@ -218,7 +313,7 @@
         msg: |-
           Caddy did not produce a certificate within {{ caddy_cert_wait_timeout }}s. Last error per name:
           {% for r in caddy_still_missing.results | rejectattr('stat.exists') %}
-            {{ r.item }}: {{ caddy_cert_errors[r.item] | default('nothing logged; check that the name is served by Caddy and read the journal') }}
+            {{ r.item }}: {{ caddy_cert_errors[caddy_cert_source[r.item] | replace('wildcard_.', '*.')] | default('nothing logged; check that the name is served by Caddy and read the journal') }}
           {% endfor %}
           {% if caddy_other_problems | length > 0 %}
           Other warnings and errors from Caddy:
@@ -235,7 +330,7 @@
 
 - name: Copy the first certificates to Stalwart
   ansible.builtin.copy:
-    src: "{{ caddy_certs_dir }}/{{ item.0.item.name }}/{{ item.0.item.name }}.{{ item.1 }}"
+    src: "{{ caddy_certs_dir }}/{{ caddy_cert_source[item.0.item.name] }}/{{ caddy_cert_source[item.0.item.name] }}.{{ item.1 }}"
     dest: "{{ stalwart_certs_dir }}/{{ item.0.item.name }}.{{ item.1 }}"
     remote_src: true
     owner: "{{ stalwart_user }}"

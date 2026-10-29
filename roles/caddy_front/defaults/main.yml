@@ -76,6 +76,11 @@ stalwart_subdomains: [mta-sts, autoconfig, autodiscover]
 # CalDAV/CardDAV discovery), ahead of a custom caddy_directive such as a
 # static landing page.
 stalwart_wellknown_passthrough: true
+# `wildcard: true` on a stalwart_domains entry (with `dns:`) serves that domain's
+# subdomains (mta-sts, autoconfig, autodiscover and every other name one label
+# below it in stalwart_domains, e.g. the mail host) from ONE wildcard
+# certificate obtained with DNS-01. The domain itself keeps its own certificate.
+# Needs Caddy 2.10+ (auto_https prefer_wildcard).
 caddy_domains: []
 dns_key_map: {}
 caddy_user_socket_dir: /run/caddy-user-sockets

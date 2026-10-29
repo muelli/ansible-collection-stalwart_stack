@@ -11,3 +11,33 @@ dns {{ dns_provider }} {
 }
 {% endif %}
 {% endmacro %}
+
+{% macro site_body(item) %}
+{% if item.kind == 'stalwart' and item.parent is not defined and stalwart_wellknown_passthrough | bool %}
+    handle /.well-known/* {
+        reverse_proxy {{ stalwart_http_proxyv2_listener }} {
+            transport http {
+                proxy_protocol v2
+            }
+        }
+    }
+
+{% endif %}
+{% if item.caddy_directive is defined and item.caddy_directive | length > 0 %}
+{{ item.caddy_directive | indent(4, true) }}
+
+{% endif %}
+{% if item.user is defined %}
+    handle {
+        reverse_proxy unix/{{ caddy_user_socket_dir }}/{{ item.user }}.sock
+    }
+{% elif item.kind == 'stalwart' %}
+    handle {
+        reverse_proxy {{ stalwart_http_proxyv2_listener }} {
+            transport http {
+                proxy_protocol v2
+            }
+        }
+    }
+{% endif %}
+{% endmacro %}

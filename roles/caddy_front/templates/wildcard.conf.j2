@@ -1,0 +1,26 @@
+{% import 'macros.j2' as macros with context %}
+# Managed by Ansible (caddy_front). One certificate for {{ item }} and the
+# names below it that Stalwart serves; each name is handled in its own block.
+*.{{ item }} {
+{% for site in caddy_wildcard_members[item] %}
+    @site{{ loop.index }} host {{ site.name }}
+    handle @site{{ loop.index }} {
+{{ macros.site_body(site) | indent(8, true) }}
+    }
+
+{% endfor %}
+    handle {
+        respond "Not found" 404
+    }
+{% set dns = (stalwart_domains | selectattr('name', 'equalto', item) | first).dns | default(none) %}
+{% if caddy_tls_mode == 'internal' %}
+
+    tls internal
+{% elif dns %}
+
+    tls {
+{{ macros.render_caddy_dns(dns, dns_key_map, caddy_dns_field_map) | indent(8, true) }}
+        propagation_delay 30s
+    }
+{% endif %}
+}

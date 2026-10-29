@@ -1,0 +1,3 @@
+# Managed by Ansible (caddy_front): %i is served by a wildcard certificate.
+[Service]
+Environment=CADDY_CERT_NAME={{ caddy_cert_source[item.0.name] }}

@@ -25,6 +25,21 @@
     - caddy_stop_result.failed | default(false)
     - "'Could not find the requested service' not in (caddy_stop_result.msg | default(''))"
 
+- name: Find the drop-in directories of the sync units
+  ansible.builtin.find:
+    paths: /etc/systemd/system
+    patterns: "stalwart-cert-sync@*.d"
+    file_type: directory
+  register: caddy_sync_dropins
+
+- name: Remove the drop-in directories of the sync units
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ caddy_sync_dropins.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+
 - name: Remove units, binary, configuration and markers
   ansible.builtin.file:
     path: "{{ item }}"

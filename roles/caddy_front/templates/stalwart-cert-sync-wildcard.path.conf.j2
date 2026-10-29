@@ -1,0 +1,4 @@
+# Managed by Ansible (caddy_front): %i is served by a wildcard certificate.
+[Path]
+PathChanged=
+PathChanged={{ caddy_certs_dir }}/{{ caddy_cert_source[item.0.name] }}/{{ caddy_cert_source[item.0.name] }}.crt

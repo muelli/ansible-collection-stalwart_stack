@@ -17,6 +17,7 @@ stalwart_default_domain: "{{ (stalwart_domains | selectattr('state', 'equalto', 
 #                           # (Stalwart's "Zone Origin"); needed for subdomains of a zone
 #   caddy_directive: ...    # extra Caddy directives, see caddy_front
 #   subdomains: [...]       # mta-sts, autoconfig, ... sites, see caddy_front
+#   wildcard: true          # one wildcard certificate for the subdomains, see caddy_front
 stalwart_domains: []
 # Entries of stalwart_domains, stalwart_relay_hosts and stalwart_server_listeners
 # with `state: absent` are destroyed in Stalwart. DNS providers that are no
