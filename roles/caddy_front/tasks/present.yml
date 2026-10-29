@@ -168,16 +168,21 @@
     label: "{{ item.name }}"
   register: stalwart_local_certs
 
+- name: List the names whose certificate Caddy has to provide
+  ansible.builtin.set_fact:
+    # The Stalwart domains that Stalwart has no copy of yet, and every
+    # subdomain site (those are served by Caddy only, nothing is copied).
+    caddy_names_to_wait: >-
+      {{ stalwart_local_certs.results | rejectattr('stat.exists') | map(attribute='item.name') | list
+         + (caddy_stalwart_subdomain_sites | selectattr('state', 'equalto', 'present') | map(attribute='name') | list) }}
+
 - name: Wait for Caddy to obtain missing certificates
   block:
     - name: Wait for the certificate files
       ansible.builtin.wait_for:
-        path: "{{ caddy_certs_dir }}/{{ item.item.name }}/{{ item.item.name }}.crt"
+        path: "{{ caddy_certs_dir }}/{{ item }}/{{ item }}.crt"
         timeout: "{{ caddy_cert_wait_timeout }}"
-      loop: "{{ stalwart_local_certs.results }}"
-      loop_control:
-        label: "{{ item.item.name }}"
-      when: not item.stat.exists
+      loop: "{{ caddy_names_to_wait }}"
   rescue:
     - name: Find this run of the Caddy service in the journal
       ansible.builtin.command:
@@ -202,12 +207,18 @@
         caddy_other_problems: >-
           {% set out = [] %}{% for l in caddy_failure_log.stdout_lines %}{% if l is match('^[{].*[}]$') %}{% set j = l | from_json %}{% if j.level | default('') in ['warn', 'warning', 'error', 'fatal', 'panic'] and j.identifier is not defined and j.msg | default('') not in ['will retry', 'job failed', 'could not get certificate from issuer'] %}{% set _ = out.append(('%H:%M:%S' | strftime(j.ts | default(0) | int)) ~ ' ' ~ j.level ~ ' ' ~ j.logger | default('') ~ ': ' ~ j.msg | default('') ~ (' - ' ~ (j.error | string | truncate(300)) if j.error is defined else '')) %}{% endif %}{% endif %}{% endfor %}{{ (out | unique | list)[-10:] }}
 
+    - name: Check which certificates are still missing
+      ansible.builtin.stat:
+        path: "{{ caddy_certs_dir }}/{{ item }}/{{ item }}.crt"
+      loop: "{{ caddy_names_to_wait }}"
+      register: caddy_still_missing
+
     - name: Fail with the reason per missing certificate
       ansible.builtin.fail:
         msg: |-
           Caddy did not produce a certificate within {{ caddy_cert_wait_timeout }}s. Last error per name:
-          {% for r in stalwart_local_certs.results | rejectattr('stat.exists') %}
-            {{ r.item.name }}: {{ caddy_cert_errors[r.item.name] | default('nothing logged; check that the name is served by Caddy and read the journal') }}
+          {% for r in caddy_still_missing.results | rejectattr('stat.exists') %}
+            {{ r.item }}: {{ caddy_cert_errors[r.item] | default('nothing logged; check that the name is served by Caddy and read the journal') }}
           {% endfor %}
           {% if caddy_other_problems | length > 0 %}
           Other warnings and errors from Caddy:
