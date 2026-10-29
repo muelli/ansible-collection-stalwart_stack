@@ -83,6 +83,7 @@
 {%- for domain in stalwart_domains if domain.state == 'present' -%}
 {%-   set slug = 'certificate-' ~ (domain.name | replace('.', '-')) -%}
 {%-   set dns_mgmt = {'@type': 'Automatic', 'dnsServerId': '#dns-' ~ (domain.dns | lower)} if domain.dns is defined else {'@type': 'Manual'} -%}
+{%-   if domain.dns is defined and domain.dns_origin is defined -%}{%- set _ = dns_mgmt.update({'origin': domain.dns_origin}) -%}{%- endif -%}
 {%-   set ops.list = ops.list + [{
         '@type': 'upsert', 'object': 'Domain', 'matchOn': ['name'],
         'value': {'domain-' ~ (domain.name | replace('.', '-')): {
