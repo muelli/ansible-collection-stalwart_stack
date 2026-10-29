@@ -248,14 +248,6 @@
     - stalwart_apply_needed | bool
     - stalwart_apply_via_recovery | bool or (stalwart_apply_mgmt.rc | default(1)) == 0
 
-- name: Wait until the recovery port is released
-  ansible.builtin.wait_for:
-    host: 127.0.0.1
-    port: "{{ stalwart_recovery_port }}"
-    state: stopped
-    timeout: 30
-  when: stalwart_apply_via_recovery | bool
-
 - name: Start and enable the Stalwart service
   ansible.builtin.systemd_service:
     name: "{{ stalwart_service_name }}"
