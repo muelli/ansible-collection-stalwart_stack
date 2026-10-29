@@ -63,7 +63,7 @@ caddy_certs_dir: "{{ caddy_storage_dir }}/certificates/{{ caddy_issuer_dir }}"
 # --- Sites ------------------------------------------------------------------
 # stalwart_domains: names served by Stalwart (web UI/JMAP behind PROXY v2, and
 # their certificate is copied to Stalwart for the mail ports).
-#   - { name: mail.example.org, state: present, dns: hetzner, caddy_directive: "..." }
+#   - { name: mail.example.org, state: present, dns: hetzner, zone_origin: example.org, caddy_directive: "..." }
 # caddy_domains: further sites. Give `user: alice` to forward to alice's own
 # Caddy over /run/caddy-user-sockets/alice.sock, or a caddy_directive.
 stalwart_domains: []

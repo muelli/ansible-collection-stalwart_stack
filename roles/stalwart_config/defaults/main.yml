@@ -9,6 +9,14 @@
 # first present entry of stalwart_domains.
 stalwart_default_domain: "{{ (stalwart_domains | selectattr('state', 'equalto', 'present') | map(attribute='name') | list | first) | default('') }}"
 
+# One entry per domain. Fields:
+#   name: mail.example.org
+#   state: present | absent
+#   dns: hetzner            # key into dns_key_map; Stalwart then publishes the DNS records
+#   zone_origin: example.org  # DNS zone at the provider if it is a parent of `name`
+#                           # (Stalwart's "Zone Origin"); needed for subdomains of a zone
+#   caddy_directive: ...    # extra Caddy directives, see caddy_front
+#   subdomains: [...]       # mta-sts, autoconfig, ... sites, see caddy_front
 stalwart_domains: []
 # Entries of stalwart_domains, stalwart_relay_hosts and stalwart_server_listeners
 # with `state: absent` are destroyed in Stalwart. DNS providers that are no

@@ -108,11 +108,11 @@ caddy_domains:
 
 With `dns:` set Stalwart publishes the domain's records itself. It assumes the
 domain is its own zone, so for `test.example.org` inside the zone `example.org`
-the provider answers "Not found". Name the zone with `dns_origin`:
+the provider answers "Not found". Name the zone with `zone_origin`:
 
 ```yaml
 stalwart_domains:
-  - { name: test.example.org, state: present, dns: spaceship, dns_origin: example.org }
+  - { name: test.example.org, state: present, dns: spaceship, zone_origin: example.org }
 ```
 
 ## Removing things

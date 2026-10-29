@@ -12,6 +12,7 @@ stalwart_domains:
   - name: mail.example.org
     state: present
     dns: hetzner            # key into dns_key_map; omit for HTTP-01 / manual DNS
+    zone_origin: example.org  # the zone at the provider when `name` is a subdomain of it
   - name: old.example.org
     state: absent
 
