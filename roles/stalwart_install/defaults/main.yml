@@ -56,7 +56,7 @@ stalwart_admin_user: admin
 # stalwart_admin_password: <required>
 
 # Where the CLI reaches the management listener created by stalwart_config.
-stalwart_mgmt_url: "http://127.0.0.1:8081"
+stalwart_mgmt_url: "http://{{ stalwart_mgmt_bind | default('127.0.0.1:8081') }}"
 stalwart_cli_env_file: "{{ stalwart_config_dir }}/cli.env"
 
 stalwart_service_name: stalwart

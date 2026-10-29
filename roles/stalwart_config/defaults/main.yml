@@ -27,7 +27,7 @@ stalwart_config_dir: /etc/stalwart
 stalwart_bin_dir: /usr/local/bin
 stalwart_service_name: stalwart
 stalwart_admin_user: admin
-stalwart_mgmt_url: "http://127.0.0.1:8081"
+stalwart_mgmt_url: "http://{{ stalwart_mgmt_bind }}"
 
 # Port of the temporary recovery instance used for the first apply.
 stalwart_recovery_port: 8080

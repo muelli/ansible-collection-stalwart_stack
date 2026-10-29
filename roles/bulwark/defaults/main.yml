@@ -12,7 +12,7 @@ bulwark_image_ref: "{{ bulwark_image }}{{ '@' ~ bulwark_image_digest if bulwark_
 
 # Where Bulwark reaches the JMAP server. The loopback management listener of
 # stalwart_config needs no PROXY protocol and no certificate.
-bulwark_jmap_url: "http://127.0.0.1:8081"
+bulwark_jmap_url: "{{ stalwart_mgmt_url | default('http://127.0.0.1:8081') }}"
 
 # The container uses the host network and listens only here.
 bulwark_bind: "127.0.0.1"
