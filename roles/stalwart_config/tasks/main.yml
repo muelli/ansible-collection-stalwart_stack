@@ -211,7 +211,11 @@
           {% for l in stalwart_recovery_log.stdout_lines | map('regex_replace', '\\x1b\\[[0-9;]*m', '') | select | unique | list %}
             {{ l | truncate(400) }}
           {% endfor %}
-          More: journalctl -u {{ stalwart_recovery_unit }} -u {{ stalwart_service_name }} on {{ inventory_hostname }}
+          {% if stalwart_recovery_log.stdout is search('prior to 1\\.0|Unsupported database schema') %}
+          Cause: {{ stalwart_data_dir | default('/var/lib/stalwart') }} holds a data store written by a 0.x Stalwart, which 1.x cannot open.
+          Stop the service and move that directory away (for example mv {{ stalwart_data_dir | default('/var/lib/stalwart') }} {{ stalwart_data_dir | default('/var/lib/stalwart') }}-0x), then run again.
+          {% endif %}
+          More: journalctl -u {{ stalwart_recovery_unit }} -u {{ stalwart_service_name }} --no-pager -n 100 on {{ inventory_hostname }}
   always:
     - name: Make sure the recovery instance is gone
       ansible.builtin.systemd_service:

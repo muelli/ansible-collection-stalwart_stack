@@ -63,21 +63,19 @@
     path: "{{ stalwart_config_dir }}/.bootstrapped"
   register: stalwart_early_sentinel
 
-- name: Refuse to start on a data store that this role did not create
-  ansible.builtin.fail:
-    msg: |-
-      {{ stalwart_data_dir }} already holds {{ stalwart_existing_data.matched }} files ({{ stalwart_existing_data.files | map(attribute='size') | sum | filesizeformat }}),
-      but this role has not bootstrapped a server on {{ inventory_hostname }} before.
-      Stalwart {{ stalwart_version }} cannot open a data store written by a 0.x release; the server stops with
-      "Unsupported database schema version". Pick one:
-      * start fresh: move the old data away (for example mv {{ stalwart_data_dir }} {{ stalwart_data_dir }}-0x) and run again
-      * migrate it first with Stalwart's own upgrade procedure, then set stalwart_allow_existing_data: true
-      * use another directory: stalwart_data_dir: /var/lib/stalwart-1
-      If this really is a 1.x store you want to keep, set stalwart_allow_existing_data: true.
+# Only a note: the files may be a fresh store written by a service that is
+# already running, so this must not stop the run. If the server cannot open an
+# older store, the failure message of the recovery step carries its log.
+- name: Note data that this role did not create
+  ansible.builtin.debug:
+    msg: >-
+      {{ stalwart_data_dir }} already holds {{ stalwart_existing_data.matched }} files
+      ({{ stalwart_existing_data.files | map(attribute='size') | sum | filesizeformat }}) and this role has not
+      bootstrapped a server here yet. If the server stops with "Unsupported database schema version", the
+      data was written by a 0.x release: move it away and run again.
   when:
     - stalwart_existing_data.matched > 0
     - not stalwart_early_sentinel.stat.exists
-    - not stalwart_allow_existing_data | bool
 
 - name: Download the Stalwart server release
   ansible.builtin.get_url:
