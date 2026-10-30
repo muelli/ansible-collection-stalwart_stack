@@ -138,6 +138,17 @@ stalwart_domains:
   `state: absent`. Files, systemd units, certificates, group memberships and the
   objects inside Stalwart (domain, its DKIM keys, certificate, relay, listener)
   are removed. `stalwart_absent_dns_providers` removes DNS providers.
+* The default domain cannot be removed. `SystemSettings.defaultDomainId` points
+  to `stalwart_default_domain`, which is the first `present` entry of
+  `stalwart_domains` (it is not derived from `stalwart_hostname`, which only
+  sets the default hostname). Stalwart also refuses to delete a domain that
+  still has accounts. To remove the default domain, put another present entry
+  first and run, delete the domain's accounts (the roles do not manage
+  accounts: `stalwart-cli delete Account --ids <id>`), then mark the domain
+  `absent` and run again.
+* Removing a domain does not remove the DNS records Stalwart published for it.
+  Delete them at the provider yourself. Recreating the domain publishes the
+  full set again, provided `zone_origin` is right.
 * Whole roles: `stalwart_install_state`, `caddy_front_state`, `bulwark_state`
   set to `absent`. Data stays unless `stalwart_purge_data`, `caddy_purge_data`
   or `bulwark_purge_data` is true. A `caddy_user_instances` entry can add
