@@ -86,15 +86,17 @@
 
 - name: Check that no Caddy site clashes with a Stalwart name
   ansible.builtin.assert:
-    that: >-
-      (caddy_domains | rejectattr('state', 'equalto', 'absent') | map(attribute='name') | list)
-      | intersect((stalwart_domains + caddy_stalwart_subdomain_sites) | selectattr('state', 'equalto', 'present') | map(attribute='name') | list)
-      | length == 0
+    that:
+      - >-
+        (caddy_domains | rejectattr('state', 'equalto', 'absent') | map(attribute='name') | list)
+        | intersect((stalwart_domains + caddy_stalwart_subdomain_sites) | selectattr('state', 'equalto', 'present') | map(attribute='name') | list)
+        | length == 0
+      - >-
+        stalwart_root_site not in (caddy_domains | rejectattr('state', 'equalto', 'absent') | map(attribute='name') | list
+        + (stalwart_domains + caddy_stalwart_subdomain_sites) | selectattr('state', 'equalto', 'present') | map(attribute='name') | list)
     fail_msg: >-
-      caddy_domains must not contain names of stalwart_domains or their subdomain sites
-      (everything on those hostnames goes to Stalwart): {{
-      (caddy_domains | rejectattr('state', 'equalto', 'absent') | map(attribute='name') | list)
-      | intersect((stalwart_domains + caddy_stalwart_subdomain_sites) | selectattr('state', 'equalto', 'present') | map(attribute='name') | list) }}
+      caddy_domains must not contain names of stalwart_domains, their subdomain sites or the
+      root site {{ stalwart_root_site }} (everything on Stalwart hostnames goes to Stalwart).
 
 - name: Work out which Caddy certificate serves each Stalwart name
   ansible.builtin.set_fact:
@@ -164,6 +166,36 @@
   loop_control:
     label: "{{ item.name }}"
   when: item.name not in caddy_wildcard_parents
+  notify: Reload Caddy
+
+- name: Work out the root site
+  ansible.builtin.set_fact:
+    caddy_root_site: >-
+      {%- if stalwart_root_site | length > 0 -%}
+      {%- set parent = stalwart_domains | selectattr('state', 'equalto', 'present') | selectattr('dns', 'defined')
+                       | selectattr('name', 'equalto', stalwart_root_site.split('.')[1:] | join('.')) | list -%}
+      {{ {'name': stalwart_root_site, 'kind': 'web'} | combine({'dns': parent[0].dns} if parent else {}) }}
+      {%- else -%}
+      {}
+      {%- endif -%}
+
+- name: Write the root site
+  ansible.builtin.template:
+    src: site.conf.j2
+    dest: "{{ caddy_conf_dir }}/_root.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  vars:
+    item: "{{ caddy_root_site }}"
+  when: caddy_root_site | length > 0
+  notify: Reload Caddy
+
+- name: Remove the root site when it is disabled
+  ansible.builtin.file:
+    path: "{{ caddy_conf_dir }}/_root.conf"
+    state: absent
+  when: caddy_root_site | length == 0
   notify: Reload Caddy
 
 - name: Write the site files of other domains

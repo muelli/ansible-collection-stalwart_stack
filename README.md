@@ -126,6 +126,16 @@ gives no list a front end could split on, and the list may grow, so a stalwart
 entry has no `caddy_directive` and nothing else can be served on that name. Put
 other sites into `caddy_domains`; the play fails when a name appears in both.
 
+`/` on a Stalwart hostname is not served by Stalwart itself but redirected
+(`Http.redirectRoot`, default `/account`). The roles point it at
+`https://www.<first stalwart domain>/` (`stalwart_redirect_root`, which derives
+from `stalwart_root_site`) and let Caddy answer there with its plain default
+response, a site with no directives and no certificate of its own when a wildcard
+covers it. Set `stalwart_redirect_root` to your own URL, or `stalwart_root_site: ""`
+and `stalwart_redirect_root: ""` to leave both alone. After applying the plan the
+role runs Stalwart's `ReloadSettings` action, since such settings are otherwise
+read only at startup.
+
 Each Stalwart domain gets one wildcard certificate (DNS-01, so it needs `dns:`;
 Caddy 2.10 or newer, which prefers a wildcard certificate over per-name ones
 when the config has one). The sites one label below the domain (`mta-sts`,

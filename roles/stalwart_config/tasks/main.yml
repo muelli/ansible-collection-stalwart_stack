@@ -133,6 +133,19 @@
     - stalwart_apply_needed | bool
     - stalwart_sentinel.stat.exists
 
+- name: Make the running server read the new settings
+  ansible.builtin.command:
+    argv: ["{{ stalwart_bin_dir }}/stalwart-cli", create, Action/ReloadSettings, --json, "{}", --no-color]
+  environment:
+    STALWART_URL: "{{ stalwart_mgmt_url }}"
+    STALWART_USER: "{{ stalwart_admin_user }}"
+    STALWART_PASSWORD: "{{ stalwart_admin_password }}"
+  changed_when: true
+  when:
+    - stalwart_apply_needed | bool
+    - stalwart_sentinel.stat.exists
+    - stalwart_apply_mgmt.rc | default(1) == 0
+
 - name: Decide whether the recovery instance is needed
   ansible.builtin.set_fact:
     stalwart_apply_via_recovery: "{{ stalwart_apply_needed | bool and (not stalwart_sentinel.stat.exists or (stalwart_apply_mgmt.rc | default(1)) != 0) }}"

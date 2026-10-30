@@ -79,6 +79,10 @@ stalwart_domains: []
 # caddy_domains: all other sites. Give `user: alice` to forward to alice's own
 # Caddy over /run/caddy-user-sockets/alice.sock, or a caddy_directive. A name
 # must not also be a Stalwart domain or one of its subdomain sites.
+# The site `/` of a Stalwart hostname redirects to (see stalwart_config,
+# stalwart_redirect_root): www. of the first present Stalwart domain. It gets no
+# directives, so Caddy answers with its plain default response. "" disables it.
+stalwart_root_site: "{{ ('www.' ~ (stalwart_domains | selectattr('state', 'equalto', 'present') | map(attribute='name') | list | first)) if (stalwart_domains | selectattr('state', 'equalto', 'present') | list | length) > 0 else '' }}"
 caddy_domains: []
 dns_key_map: {}
 caddy_user_socket_dir: /run/caddy-user-sockets
