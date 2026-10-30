@@ -100,21 +100,6 @@
       {%- endfor -%}
       {{ src }}
 
-- name: Collect the sites each wildcard certificate serves
-  ansible.builtin.set_fact:
-    caddy_wildcard_members: >-
-      {%- set out = {} -%}
-      {%- for p in caddy_wildcard_parents -%}
-      {%- set _ = out.update({p: []}) -%}
-      {%- endfor -%}
-      {%- for d in stalwart_domains | selectattr('state', 'equalto', 'present') | map('combine', {'kind': 'stalwart'}) -%}
-      {%- if caddy_cert_source[d.name].startswith('wildcard_.') -%}{%- set _ = out[caddy_cert_source[d.name][10:]].append(d) -%}{%- endif -%}
-      {%- endfor -%}
-      {%- for d in caddy_stalwart_subdomain_sites | selectattr('state', 'equalto', 'present') -%}
-      {%- if caddy_cert_source[d.name].startswith('wildcard_.') -%}{%- set _ = out[caddy_cert_source[d.name][10:]].append(d) -%}{%- endif -%}
-      {%- endfor -%}
-      {{ out }}
-
 - name: Write the Caddyfile
   ansible.builtin.template:
     src: Caddyfile.j2
@@ -143,16 +128,9 @@
     mode: "0644"
   loop: "{{ ((stalwart_domains | selectattr('state', 'equalto', 'present') | map('combine', {'kind': 'stalwart'}) | list)
             + (caddy_stalwart_subdomain_sites | selectattr('state', 'equalto', 'present') | list))
-            | rejectattr('name', 'in', caddy_cert_source | dict2items | selectattr('value', 'match', '^wildcard_') | map(attribute='key') | list) | list }}"
+            }}"
   loop_control:
     label: "{{ item.name }}"
-  notify: Reload Caddy
-
-- name: Remove the own site files of names served by a wildcard certificate
-  ansible.builtin.file:
-    path: "{{ caddy_conf_dir }}/{{ item }}.conf"
-    state: absent
-  loop: "{{ caddy_cert_source | dict2items | selectattr('value', 'match', '^wildcard_') | map(attribute='key') | list }}"
   notify: Reload Caddy
 
 - name: Write the wildcard site files

@@ -5,7 +5,7 @@
 {% if caddy_tls_mode == 'internal' %}
 
     tls internal
-{% elif item.dns is defined %}
+{% elif item.dns is defined and not (caddy_cert_source[item.name] | default('')).startswith('wildcard_') %}
 
     tls {
 {{ macros.render_caddy_dns(item.dns, dns_key_map, caddy_dns_field_map) | indent(8, true) }}

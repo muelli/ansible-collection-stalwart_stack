@@ -118,12 +118,14 @@ stalwart_domains:
 ### One wildcard certificate per domain
 
 `wildcard: true` on a `stalwart_domains` entry (needs `dns:`) obtains one
-`*.example.org` certificate with DNS-01. Everything one label below the domain
-that the roles serve (the `mta-sts`, `autoconfig` and `autodiscover` sites and
-other `stalwart_domains` entries such as the mail host) is handled inside that
-wildcard site and uses it, and the copy for Stalwart's mail ports is taken from
-it. The domain itself keeps its own certificate, `caddy_domains` entries keep
-theirs, and unknown subdomains get a 404.
+`*.example.org` certificate with DNS-01 (Caddy 2.10 or newer, which prefers a
+wildcard certificate over per-name ones when the config has one). The sites the
+roles serve one label below the domain (`mta-sts`, `autoconfig`, `autodiscover`
+and other `stalwart_domains` entries such as the mail host) keep their own site
+files but get no certificate of their own, and the copy for Stalwart's mail
+ports is taken from the wildcard certificate. The domain itself keeps its own
+certificate, `caddy_domains` entries keep theirs, and unknown subdomains get a
+404 from the wildcard site.
 
 ```yaml
 stalwart_domains:

@@ -1,17 +1,9 @@
 {% import 'macros.j2' as macros with context %}
-# Managed by Ansible (caddy_front). One certificate for {{ item }} and the
-# names below it that Stalwart serves; each name is handled in its own block.
+# Managed by Ansible (caddy_front). Holds the one certificate for the names
+# below {{ item }}; the names the roles serve have their own site files and
+# use it (Caddy 2.10+ prefers a wildcard certificate over per-name ones).
 *.{{ item }} {
-{% for site in caddy_wildcard_members[item] %}
-    @site{{ loop.index }} host {{ site.name }}
-    handle @site{{ loop.index }} {
-{{ macros.site_body(site) | indent(8, true) }}
-    }
-
-{% endfor %}
-    handle {
-        respond "Not found" 404
-    }
+    respond "Not found" 404
 {% set dns = (stalwart_domains | selectattr('name', 'equalto', item) | first).dns | default(none) %}
 {% if caddy_tls_mode == 'internal' %}
 
