@@ -61,31 +61,29 @@ caddy_issuer_dir: "{{ 'local' if caddy_tls_mode == 'internal' else acme_host_slu
 caddy_certs_dir: "{{ caddy_storage_dir }}/certificates/{{ caddy_issuer_dir }}"
 
 # --- Sites ------------------------------------------------------------------
-# stalwart_domains: names served by Stalwart (web UI/JMAP behind PROXY v2, and
-# their certificate is copied to Stalwart for the mail ports).
-#   - { name: mail.example.org, state: present, dns: hetzner, zone_origin: example.org, caddy_directive: "..." }
-# caddy_domains: further sites. Give `user: alice` to forward to alice's own
-# Caddy over /run/caddy-user-sockets/alice.sock, or a caddy_directive.
-stalwart_domains: []
+# stalwart_domains: names served by Stalwart. Caddy forwards EVERYTHING on them
+# to Stalwart's PROXY v2 listener (web UI, JMAP, DAV, discovery, MTA-STS), so
+# nothing else can be served on these hostnames; they have no caddy_directive.
+# Their certificate is copied to Stalwart for the mail ports.
+#   - { name: mail.example.org, state: present, dns: hetzner, zone_origin: example.org }
+# Each domain gets one wildcard certificate (DNS-01, so it needs `dns:`; Caddy
+# 2.10+ prefers it over per-name ones) for the sites one label below it:
+# mta-sts, autoconfig, autodiscover and other stalwart_domains entries such as
+# the mail host. The domain itself keeps its own certificate. `wildcard: false`
+# gives every name its own certificate instead.
 # Subdomains of every Stalwart domain that clients look up over HTTPS: the
-# MTA-STS policy, Thunderbird autoconfig and Outlook autodiscover. Each gets
-# its own Caddy site and certificate and is forwarded to Stalwart. Override
-# per domain with `subdomains: [...]`, or `subdomains: []` for none.
+# MTA-STS policy, Thunderbird autoconfig and Outlook autodiscover, forwarded to
+# Stalwart too. Override per domain with `subdomains: [...]`, or `[]` for none.
 stalwart_subdomains: [mta-sts, autoconfig, autodiscover]
-# Always forward /.well-known/* of a Stalwart domain to Stalwart (JMAP,
-# CalDAV/CardDAV discovery), ahead of a custom caddy_directive such as a
-# static landing page.
-stalwart_wellknown_passthrough: true
-# `wildcard: true` on a stalwart_domains entry (with `dns:`) serves that domain's
-# subdomains (mta-sts, autoconfig, autodiscover and every other name one label
-# below it in stalwart_domains, e.g. the mail host) from ONE wildcard
-# certificate obtained with DNS-01. The domain itself keeps its own certificate.
-# Needs Caddy 2.10+ (a wildcard certificate in the config is then preferred).
+stalwart_domains: []
+# caddy_domains: all other sites. Give `user: alice` to forward to alice's own
+# Caddy over /run/caddy-user-sockets/alice.sock, or a caddy_directive. A name
+# must not also be a Stalwart domain or one of its subdomain sites.
 caddy_domains: []
 dns_key_map: {}
 caddy_user_socket_dir: /run/caddy-user-sockets
 
-stalwart_http_proxyv2_listener: "127.0.0.1:8008"
+stalwart_http_proxyv2_listener: "{{ stalwart_http_proxy_bind | default('127.0.0.1:8008') }}"
 stalwart_certs_dir: /etc/stalwart/certs
 stalwart_user: stalwart
 stalwart_group: stalwart

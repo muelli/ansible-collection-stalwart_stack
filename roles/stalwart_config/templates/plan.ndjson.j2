@@ -3,7 +3,8 @@
 
 {#- Stage 0: listeners -#}
 {%- set listeners = {} -%}
-{%- for l in stalwart_server_listeners if l.state | default('present', true) == 'present' -%}
+{%- set all_listeners = stalwart_server_listeners + (stalwart_required_listeners | rejectattr('name', 'in', stalwart_server_listeners | map(attribute='name') | list) | list) -%}
+{%- for l in all_listeners if l.state | default('present', true) == 'present' -%}
 {%-   set binds = {} -%}
 {%-   for b in l.bind -%}{%- set _ = binds.update({b: true}) -%}{%- endfor -%}
 {#-   Stalwart models sets as {value: true}; accept plain lists for such options. -#}

@@ -115,21 +115,30 @@ stalwart_domains:
   - { name: test.example.org, state: present, dns: spaceship, zone_origin: example.org }
 ```
 
-### One wildcard certificate per domain
+### Stalwart domains and Caddy sites are separate
 
-`wildcard: true` on a `stalwart_domains` entry (needs `dns:`) obtains one
-`*.example.org` certificate with DNS-01 (Caddy 2.10 or newer, which prefers a
-wildcard certificate over per-name ones when the config has one). The sites the
-roles serve one label below the domain (`mta-sts`, `autoconfig`, `autodiscover`
-and other `stalwart_domains` entries such as the mail host) keep their own site
-files but get no certificate of their own, and the copy for Stalwart's mail
-ports is taken from the wildcard certificate. The domain itself keeps its own
-certificate, `caddy_domains` entries keep theirs, and unknown subdomains get a
-404 from the wildcard site.
+Everything on the hostname of a `stalwart_domains` entry goes to Stalwart, through
+its `http-proxy` listener with PROXY protocol v2 (the roles always create that
+listener and the loopback `mgmt` listener, even when `stalwart_server_listeners`
+is overridden). Stalwart serves many paths there (`/jmap`, `/dav`, `/auth`,
+`/login`, `/.well-known/*`, `/autodiscover`, `/admin`, ...), its documentation
+gives no list a front end could split on, and the list may grow, so a stalwart
+entry has no `caddy_directive` and nothing else can be served on that name. Put
+other sites into `caddy_domains`; the play fails when a name appears in both.
+
+Each Stalwart domain gets one wildcard certificate (DNS-01, so it needs `dns:`;
+Caddy 2.10 or newer, which prefers a wildcard certificate over per-name ones
+when the config has one). The sites one label below the domain (`mta-sts`,
+`autoconfig`, `autodiscover` and other `stalwart_domains` entries such as the
+mail host) keep their own site files but get no certificate of their own, and
+the copy for Stalwart's mail ports is taken from the wildcard certificate. The
+domain itself keeps its own certificate, `caddy_domains` entries keep theirs,
+and unknown subdomains get a 404 from the wildcard site. `wildcard: false` on an
+entry gives every name its own certificate.
 
 ```yaml
 stalwart_domains:
-  - { name: test.example.org, state: present, dns: spaceship, zone_origin: example.org, wildcard: true }
+  - { name: test.example.org, state: present, dns: spaceship, zone_origin: example.org }
   - { name: mail.test.example.org, state: present }
 ```
 

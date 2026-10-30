@@ -68,20 +68,33 @@
       {%- set out = [] -%}
       {%- for d in stalwart_domains -%}
       {%- for s in d.subdomains | default(stalwart_subdomains) -%}
-      {%- set _ = out.append(d | combine({'name': s ~ '.' ~ d.name, 'parent': d.name, 'kind': 'stalwart', 'caddy_directive': ''})) -%}
+      {%- set _ = out.append(d | combine({'name': s ~ '.' ~ d.name, 'parent': d.name, 'kind': 'stalwart'})) -%}
       {%- endfor -%}
       {%- endfor -%}
       {{ out }}
 
 - name: Work out which Stalwart domains get a wildcard certificate
   ansible.builtin.set_fact:
-    # Needs DNS-01, so a `dns:` provider (or the internal CA).
+    # Every present domain unless `wildcard: false`. Needs DNS-01, so a `dns:`
+    # provider (or the internal CA).
     caddy_wildcard_parents: >-
-      {{ stalwart_domains | selectattr('state', 'equalto', 'present') | selectattr('wildcard', 'defined') | selectattr('wildcard')
-         | selectattr('dns', 'defined') | map(attribute='name') | list
-         if caddy_tls_mode != 'internal' else
-         stalwart_domains | selectattr('state', 'equalto', 'present') | selectattr('wildcard', 'defined') | selectattr('wildcard')
-         | map(attribute='name') | list }}
+      {%- set out = [] -%}
+      {%- for d in stalwart_domains if d.state == 'present' and d.wildcard | default(true) -%}
+      {%- if caddy_tls_mode == 'internal' or d.dns is defined -%}{%- set _ = out.append(d.name) -%}{%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+
+- name: Check that no Caddy site clashes with a Stalwart name
+  ansible.builtin.assert:
+    that: >-
+      (caddy_domains | rejectattr('state', 'equalto', 'absent') | map(attribute='name') | list)
+      | intersect((stalwart_domains + caddy_stalwart_subdomain_sites) | selectattr('state', 'equalto', 'present') | map(attribute='name') | list)
+      | length == 0
+    fail_msg: >-
+      caddy_domains must not contain names of stalwart_domains or their subdomain sites
+      (everything on those hostnames goes to Stalwart): {{
+      (caddy_domains | rejectattr('state', 'equalto', 'absent') | map(attribute='name') | list)
+      | intersect((stalwart_domains + caddy_stalwart_subdomain_sites) | selectattr('state', 'equalto', 'present') | map(attribute='name') | list) }}
 
 - name: Work out which Caddy certificate serves each Stalwart name
   ansible.builtin.set_fact:

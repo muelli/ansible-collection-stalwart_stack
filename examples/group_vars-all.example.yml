@@ -13,7 +13,8 @@ stalwart_domains:
     state: present
     dns: hetzner            # key into dns_key_map; omit for HTTP-01 / manual DNS
     zone_origin: example.org  # the zone at the provider when `name` is a subdomain of it
-    wildcard: true          # one *.mail.example.org certificate for mta-sts, autoconfig, ... (needs dns)
+    # With dns, one *.mail.example.org certificate covers mta-sts, autoconfig, ...
+    # (`wildcard: false` turns that off). Everything on this name goes to Stalwart.
   - name: old.example.org
     state: absent
 

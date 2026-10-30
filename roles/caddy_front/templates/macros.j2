@@ -13,16 +13,15 @@ dns {{ dns_provider }} {
 {% endmacro %}
 
 {% macro site_body(item) %}
-{% if item.kind == 'stalwart' and item.parent is not defined and stalwart_wellknown_passthrough | bool %}
-    handle /.well-known/* {
+{% if item.kind == 'stalwart' %}
+    handle {
         reverse_proxy {{ stalwart_http_proxyv2_listener }} {
             transport http {
                 proxy_protocol v2
             }
         }
     }
-
-{% endif %}
+{% else %}
 {% if item.caddy_directive is defined and item.caddy_directive | length > 0 %}
 {{ item.caddy_directive | indent(4, true) }}
 
@@ -31,13 +30,6 @@ dns {{ dns_provider }} {
     handle {
         reverse_proxy unix/{{ caddy_user_socket_dir }}/{{ item.user }}.sock
     }
-{% elif item.kind == 'stalwart' %}
-    handle {
-        reverse_proxy {{ stalwart_http_proxyv2_listener }} {
-            transport http {
-                proxy_protocol v2
-            }
-        }
-    }
+{% endif %}
 {% endif %}
 {% endmacro %}

@@ -15,9 +15,10 @@ stalwart_default_domain: "{{ (stalwart_domains | selectattr('state', 'equalto', 
 #   dns: hetzner            # key into dns_key_map; Stalwart then publishes the DNS records
 #   zone_origin: example.org  # DNS zone at the provider if it is a parent of `name`
 #                           # (Stalwart's "Zone Origin"); needed for subdomains of a zone
-#   caddy_directive: ...    # extra Caddy directives, see caddy_front
 #   subdomains: [...]       # mta-sts, autoconfig, ... sites, see caddy_front
-#   wildcard: true          # one wildcard certificate for the subdomains, see caddy_front
+#   wildcard: false         # no wildcard certificate (default: one per domain with dns), see caddy_front
+# Caddy forwards everything on these hostnames to Stalwart; serve other sites
+# through caddy_domains.
 stalwart_domains: []
 # Entries of stalwart_domains, stalwart_relay_hosts and stalwart_server_listeners
 # with `state: absent` are destroyed in Stalwart. DNS providers that are no
@@ -63,6 +64,12 @@ stalwart_server_listeners:
   - { name: imap, protocol: imap, bind: ["[::]:143"], options: { useTls: true } }
   - { name: imaps, protocol: imap, bind: ["[::]:993"], options: { implicitTls: true } }
   - { name: sieve, protocol: manageSieve, bind: ["[::]:4190"], options: { useTls: true } }
+
+# Listeners the roles depend on: Caddy forwards to http-proxy with PROXY
+# protocol v2, stalwart-cli and Bulwark use mgmt. They are always part of the
+# plan, even when stalwart_server_listeners is overridden; an entry of the same
+# name in stalwart_server_listeners replaces the one below.
+stalwart_required_listeners:
   - name: http-proxy
     protocol: http
     bind: ["{{ stalwart_http_proxy_bind }}"]
