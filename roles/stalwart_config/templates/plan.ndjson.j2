@@ -40,6 +40,22 @@
 {%-   set ops.list = ops.list + [{'@type': 'upsert', 'object': 'MtaRoute', 'matchOn': ['name'], 'value': {'route-' ~ route.name: fields}}] -%}
 {%- endfor -%}
 
+{#- Stage 1b: web applications served by Stalwart (zip bundles under URL prefixes) -#}
+{%- for app in stalwart_applications if app.state | default('present', true) == 'absent' -%}
+{%-   set ops.list = ops.list + [{'@type': 'destroy', 'object': 'Application', 'value': {'description': app.description}}] -%}
+{%- endfor -%}
+{%- for app in stalwart_applications if app.state | default('present', true) == 'present' -%}
+{%-   set prefixes = {} -%}
+{%-   for p in app.url_prefix -%}{%- set _ = prefixes.update({p: true}) -%}{%- endfor -%}
+{%-   set fields = {
+        'description': app.description, 'urlPrefix': prefixes, 'resourceUrl': app.resource_url,
+        'enable': app.enable | default(true) | bool
+      } -%}
+{%-   if app.auto_update_interval is defined -%}{%- set _ = fields.update({'autoUpdateInterval': app.auto_update_interval | int}) -%}{%- endif -%}
+{%-   if app.oauth_client_id is defined -%}{%- set _ = fields.update({'oauthClientId': app.oauth_client_id}) -%}{%- endif -%}
+{%-   set ops.list = ops.list + [{'@type': 'upsert', 'object': 'Application', 'matchOn': ['description'], 'value': {'app-' ~ app.description: fields}}] -%}
+{%- endfor -%}
+
 {#- Stage 2: DNS providers, one per distinct provider in use -#}
 {%- for dns in stalwart_absent_dns_providers -%}
 {%-   set ops.list = ops.list + [{'@type': 'destroy', 'object': 'DnsServer', 'value': {'description': dns | capitalize}}] -%}

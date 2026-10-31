@@ -34,6 +34,18 @@ stalwart_absent_dns_providers: []
 # Filled in during the run: server ids of the domains to remove.
 stalwart_absent_domain_ids: {}
 stalwart_relay_hosts: []
+# Web applications Stalwart downloads (zip bundle) and serves under URL prefixes
+# (Application objects, matched by description; `state: absent` destroys one).
+# Stalwart's own interface (/admin, /account) exists by default and is not
+# touched. Stalwart accepts only single path segments as prefixes (/app, not
+# / or /a/b), so an application cannot take over `/`; that stays with
+# stalwart_redirect_root. auto_update_interval is in milliseconds.
+#   - description: Some app
+#     url_prefix: [/app]
+#     resource_url: https://example.org/bundle.zip
+#     enable: true                  # default
+#     auto_update_interval: 7776000000
+stalwart_applications: []
 sender_domain_routing: []
 dns_key_map: {}
 

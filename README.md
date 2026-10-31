@@ -152,6 +152,22 @@ stalwart_domains:
   - { name: mail.test.example.org, state: present }
 ```
 
+### Web applications
+
+`stalwart_applications` creates Stalwart `Application` objects: a zip bundle that
+Stalwart downloads and serves under a URL prefix, next to its own `/admin` and
+`/account`. After the plan is applied the roles run the `UpdateApps` action so
+the bundle is fetched at once. Stalwart only accepts a single path segment as
+prefix (`/app`, not `/` or `/a/b`), so an application cannot take over `/`; that
+is what `stalwart_redirect_root` is for.
+
+```yaml
+stalwart_applications:
+  - description: Some app
+    url_prefix: [/app]
+    resource_url: https://example.org/app.zip
+```
+
 ## Removing things
 
 * Entries of `stalwart_domains`, `stalwart_relay_hosts`,
