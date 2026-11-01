@@ -41,9 +41,7 @@
 {%- endfor -%}
 
 {#- Stage 1b: web applications served by Stalwart (zip bundles under URL prefixes) -#}
-{%- for app in stalwart_applications if app.state | default('present', true) == 'absent' -%}
-{%-   set ops.list = ops.list + [{'@type': 'destroy', 'object': 'Application', 'value': {'description': app.description}}] -%}
-{%- endfor -%}
+{#- Applications marked absent are deleted by id in tasks/main.yml: Stalwart cannot filter them. -#}
 {%- for app in stalwart_applications if app.state | default('present', true) == 'present' -%}
 {%-   set prefixes = {} -%}
 {%-   for p in app.url_prefix -%}{%- set _ = prefixes.update({p: true}) -%}{%- endfor -%}

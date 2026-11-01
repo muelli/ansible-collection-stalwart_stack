@@ -119,6 +119,43 @@
     - stalwart_sentinel.stat.exists
     - stalwart_absent_domain_ids | length > 0
 
+- name: List the applications of the server
+  ansible.builtin.command:
+    argv: ["{{ stalwart_bin_dir }}/stalwart-cli", query, Application, --fields, description, --json, --no-color]
+  environment:
+    STALWART_URL: "{{ stalwart_mgmt_url }}"
+    STALWART_USER: "{{ stalwart_admin_user }}"
+    STALWART_PASSWORD: "{{ stalwart_admin_password }}"
+  register: stalwart_application_list
+  changed_when: false
+  failed_when: false
+  when:
+    - stalwart_sentinel.stat.exists
+    - stalwart_applications | selectattr('state', 'defined') | selectattr('state', 'equalto', 'absent') | list | length > 0
+
+- name: Work out the ids of the applications that are to be removed
+  ansible.builtin.set_fact:
+    # Stalwart cannot filter Application objects, so destroy-by-description does
+    # not work; match the listing here and delete by id.
+    stalwart_absent_application_ids: >-
+      {%- set gone = stalwart_applications | selectattr('state', 'defined') | selectattr('state', 'equalto', 'absent') | map(attribute='description') | list -%}
+      {%- set out = [] -%}
+      {%- for l in stalwart_application_list.stdout_lines | default([]) if l is match('^[{]') -%}
+      {%- set o = l | from_json -%}
+      {%- if o.description | default('') in gone -%}{%- set _ = out.append(o.id) -%}{%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+
+- name: Remove the applications that are marked absent
+  ansible.builtin.command:
+    argv: ["{{ stalwart_bin_dir }}/stalwart-cli", delete, Application, --ids, "{{ stalwart_absent_application_ids | join(',') }}", --no-color]
+  environment:
+    STALWART_URL: "{{ stalwart_mgmt_url }}"
+    STALWART_USER: "{{ stalwart_admin_user }}"
+    STALWART_PASSWORD: "{{ stalwart_admin_password }}"
+  changed_when: true
+  when: stalwart_absent_application_ids | length > 0
+
 - name: Apply the plan through the running management listener
   ansible.builtin.command:
     argv: ["{{ stalwart_bin_dir }}/stalwart-cli", apply, --file, "{{ stalwart_config_dir }}/plan.ndjson", --quiet, --no-color]
