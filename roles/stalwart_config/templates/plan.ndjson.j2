@@ -117,6 +117,7 @@
 {%- if stalwart_default_domain | length > 0 -%}{%- set _ = settings.update({'defaultDomainId': '#domain-' ~ (stalwart_default_domain | replace('.', '-'))}) -%}{%- endif -%}
 {%- set ops.list = ops.list + [{'@type': 'update', 'object': 'SystemSettings', 'value': settings}] -%}
 
+{%- set ops.list = ops.list + [{'@type': 'update', 'object': 'Http', 'id': 'singleton', 'value': {'usePermissiveCors': stalwart_permissive_cors | bool}}] -%}
 {%- if stalwart_redirect_root | length > 0 -%}
 {%-   set ops.list = ops.list + [{'@type': 'update', 'object': 'Http', 'id': 'singleton', 'value': {'redirectRoot': stalwart_redirect_root}}] -%}
 {%- endif -%}

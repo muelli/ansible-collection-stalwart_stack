@@ -27,6 +27,12 @@ stalwart_domains: []
 # it to a URL of your own, or "" to leave Stalwart's setting alone.
 stalwart_root_site: "{{ ('www.' ~ (stalwart_domains | selectattr('state', 'equalto', 'present') | map(attribute='name') | list | first)) if (stalwart_domains | selectattr('state', 'equalto', 'present') | list | length) > 0 else '' }}"
 stalwart_redirect_root: "{{ ('https://' ~ stalwart_root_site ~ '/') if stalwart_root_site | length > 0 else '' }}"
+# Browser apps on another origin (Bulwark) call JMAP on the Stalwart hostname
+# directly. Stalwart answers those cross-origin requests only with
+# Http.usePermissiveCors; without it the browser reports "blocking cross-origin
+# requests". Authentication stays with the Authorization header (no cookies),
+# so any origin still needs valid credentials. On by default with Bulwark.
+stalwart_permissive_cors: "{{ bulwark_enabled | default(false) }}"
 # Entries of stalwart_domains, stalwart_relay_hosts and stalwart_server_listeners
 # with `state: absent` are destroyed in Stalwart. DNS providers that are no
 # longer wanted (names as in dns_key_map) go here:
