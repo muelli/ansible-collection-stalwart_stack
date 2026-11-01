@@ -90,8 +90,10 @@ mail roles, so it does not replace other rule lists.
 The `bulwark` role runs the full Bulwark edition as a podman container through a
 Quadlet unit (`/etc/containers/systemd/bulwark.container`), so systemd manages
 it like a native service (`systemctl status bulwark`). It uses the host network,
-listens on `127.0.0.1:3000` and talks to Stalwart's loopback management
-listener. Enable it with `bulwark_enabled: true` and `bulwark_admin_password`
+listens on `127.0.0.1:3000`. The browser talks to Stalwart directly, so Bulwark
+is pointed at `https://<stalwart_hostname>` (`bulwark_jmap_url`), never at the
+loopback listener: the browser would try to reach `127.0.0.1` on its own
+machine. Enable it with `bulwark_enabled: true` and `bulwark_admin_password`
 (vault), then add a Caddy site:
 
 ```yaml

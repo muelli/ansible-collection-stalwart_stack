@@ -10,9 +10,10 @@ bulwark_image: ghcr.io/bulwarkmail/webmail
 bulwark_image_digest: ""
 bulwark_image_ref: "{{ bulwark_image }}{{ '@' ~ bulwark_image_digest if bulwark_image_digest else ':' ~ bulwark_version }}"
 
-# Where Bulwark reaches the JMAP server. The loopback management listener of
-# stalwart_config needs no PROXY protocol and no certificate.
-bulwark_jmap_url: "{{ stalwart_mgmt_url | default('http://127.0.0.1:8081') }}"
+# JMAP server URL. Bulwark hands this to the browser (/api/config), which talks
+# to Stalwart directly, so it must be a public HTTPS URL, not the loopback
+# management listener. Caddy forwards the Stalwart hostname to Stalwart.
+bulwark_jmap_url: "{{ 'https://' ~ stalwart_hostname if stalwart_hostname | default('') | length > 0 else stalwart_mgmt_url | default('http://127.0.0.1:8081') }}"
 
 # The container uses the host network and listens only here.
 bulwark_bind: "127.0.0.1"
