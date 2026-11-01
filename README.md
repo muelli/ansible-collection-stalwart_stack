@@ -32,7 +32,13 @@ on x86_64 or aarch64 with systemd.
   `stalwart-cert-sync@<domain>.path` copies a renewed certificate to
   `/etc/stalwart/certs` and asks Stalwart to reload it.
 * `caddy_domains` entries with `user: alice` are forwarded to
-  `/run/caddy-user-sockets/alice.sock`. systemd creates that socket (mode
+  `/run/caddy-user-sockets/alice.sock`. The hosts of a `caddy_user_instances`
+  entry (`sites[].hosts`) get such a site automatically, so they only have to be
+  listed once; a `caddy_domains` entry of the same name takes precedence (for
+  `dns:` or other options). The DNS provider defaults to the site's `dns:`, else
+  the one of the longest Stalwart domain the host lies below, else none
+  (HTTP-01). An instance with `caddyfile:` and no `sites:` needs its hosts in
+  `caddy_domains`. systemd creates that socket (mode
   `0660`, group `alice`; the front Caddy joins the group). The first request
   starts `systemd-socket-proxyd`, which starts alice's Caddy; both stop after
   `caddy_user_idle_time` without traffic.

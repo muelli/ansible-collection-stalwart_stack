@@ -42,7 +42,8 @@ dns_key_map:
   hetzner:
     api_token: "{{ vault_hetzner_api_token }}"
 
-# Per-user Caddy instances.
+# Per-user Caddy instances. Their hosts are served by the front Caddy
+# automatically; no caddy_domains entry is needed.
 caddy_user_instances:
   - name: alice
     sites:
