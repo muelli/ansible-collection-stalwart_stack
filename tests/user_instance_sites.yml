@@ -1,0 +1,70 @@
+---
+# Offline test of how caddy_front derives sites from caddy_user_instances.
+#   ansible-playbook -i localhost, -c local tests/user_instance_sites.yml
+- name: Sites derived from caddy_user_instances
+  hosts: localhost
+  gather_facts: false
+  vars:
+    stalwart_domains:
+      - { name: test.example.org, state: present, dns: spaceship }
+      - { name: a.test.example.org, state: present, dns: other }
+    caddy_user_instances:
+      - name: muelli
+        sites:
+          - hosts: [muelli.test.example.org, www.muelli.test.example.org]
+          - hosts: [x.a.test.example.org]
+          - hosts: [other.net, bare.invalid]
+            dns: own
+      - { name: gone, state: absent, sites: [{ hosts: [gone.test.example.org] }] }
+      - plainname
+      - { name: nosites, caddyfile: files/x }
+    # Expected result for caddy_domains: []
+    expected:
+      muelli.test.example.org: { state: present, user: muelli, dns: spaceship }
+      www.muelli.test.example.org: { state: present, user: muelli, dns: spaceship }
+      x.a.test.example.org: { state: present, user: muelli, dns: other }
+      other.net: { state: present, user: muelli, dns: own }
+      gone.test.example.org: { state: absent, user: gone, dns: spaceship }
+  tasks:
+    - name: Derive with nothing listed in caddy_domains
+      ansible.builtin.include_tasks: ../roles/caddy_front/tasks/user_instance_sites.yml
+      vars:
+        caddy_domains: []
+
+    - name: Every host is a site, once, with the expected owner, state and DNS provider
+      ansible.builtin.assert:
+        that:
+          - caddy_all_domains | length == expected | length
+          - caddy_all_domains | map(attribute='name') | list | sort == expected.keys() | list | sort
+          - item.state == expected[item.name].state
+          - item.user == expected[item.name].user
+          - item.dns == expected[item.name].dns
+      loop: "{{ caddy_all_domains }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Derive with the same hosts also listed in caddy_domains
+      ansible.builtin.include_tasks: ../roles/caddy_front/tasks/user_instance_sites.yml
+      vars:
+        caddy_domains:
+          - { name: www.muelli.test.example.org, state: present, dns: spaceship, user: muelli }
+          - { name: muelli.test.example.org, state: present, dns: spaceship, user: muelli }
+
+    - name: Listing a host twice changes nothing
+      ansible.builtin.assert:
+        that:
+          - caddy_all_domains | length == expected | length
+          - caddy_all_domains | map(attribute='name') | list | sort == expected.keys() | list | sort
+
+    - name: Derive with an explicit entry that differs from the derived one
+      ansible.builtin.include_tasks: ../roles/caddy_front/tasks/user_instance_sites.yml
+      vars:
+        caddy_domains:
+          - { name: muelli.test.example.org, state: present, caddy_directive: 'respond "x"' }
+
+    - name: The explicit entry wins as written
+      ansible.builtin.assert:
+        that:
+          - (caddy_all_domains | selectattr('name', 'equalto', 'muelli.test.example.org') | list) | length == 1
+          - (caddy_all_domains | selectattr('name', 'equalto', 'muelli.test.example.org') | first).caddy_directive == 'respond "x"'
+          - (caddy_all_domains | selectattr('name', 'equalto', 'muelli.test.example.org') | first).user is not defined

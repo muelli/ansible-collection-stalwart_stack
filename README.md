@@ -1,4 +1,4 @@
-# Stalwart behind Caddy, in four Ansible roles
+# Stalwart behind Caddy, in five Ansible roles
 
 | Role | Does |
 | --- | --- |
@@ -6,6 +6,7 @@
 | `caddy_front` | Caddy from the official build service (with DNS plugins), TLS for every web name, sites for Stalwart and other domains, certificate sync to Stalwart |
 | `caddy_user_instances` | Socket-activated Caddy per user, reached by the front Caddy over a `0660` UNIX socket |
 | `stalwart_config` | The declarative plan (listeners, DNS providers, certificates, domains, relays, sender routing) applied with `stalwart-cli apply` |
+| `bulwark` | Bulwark webmail as a Podman Quadlet container, pointed at Stalwart's public URL (optional, `bulwark_enabled`) |
 
 Run order is fixed (`playbook.yml`): install, front Caddy (it must obtain the
 certificates the plan references), user instances, then the plan.
@@ -223,7 +224,21 @@ binary) and the DebOps group check.
 Also tested: Bulwark as a Quadlet container behind Caddy, `state: absent` for
 domains, relays, listeners and per-user instances, the full teardown with purge
 and a fresh reinstall (second run changed nothing).
-Not tested: logging in to Bulwark, DNS-01 against real providers and automatic DNS management.
+Also tested: `stalwart_applications` (create, update, `state: absent`, repeat
+runs), origin-restricted CORS for Bulwark, sites derived from
+`caddy_user_instances`, and on a real host: webmail login at Bulwark, a user
+Caddy site with a DNS-01 certificate from Spaceship.
+Not tested: push notifications (Stalwart to the Bulwark push relay), relays and
+sender routing against real servers, other distributions than Ubuntu 26.04.
+
+## Tests
+
+`tests/run.sh` needs no target host: it syntax-checks `playbook.yml` and
+`teardown.yml`, parses every YAML file and template, runs the derivation of
+Caddy sites from `caddy_user_instances` (`tests/user_instance_sites.yml`) with
+the hosts listed once, twice and with a differing explicit entry, and runs
+`ansible-lint` when installed (`var-naming` and `yaml` style rules are skipped).
+Everything else was tested by hand on a VM, see above.
 
 ## License
 

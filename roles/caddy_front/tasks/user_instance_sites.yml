@@ -1,0 +1,34 @@
+---
+- name: Add the hosts of the user Caddy instances as sites
+  ansible.builtin.set_fact:
+    # Every host of caddy_user_instances[].sites[].hosts becomes a site that
+    # forwards to that user's socket, so it needs listing only there. A
+    # caddy_domains entry of the same name wins and is used as written. The DNS
+    # provider is the site's own `dns:`, else that of the longest Stalwart
+    # domain the host lies below, else none (HTTP-01 / TLS-ALPN-01). Instances
+    # with a `caddyfile:` and no `sites:` have no known hosts; list them in
+    # caddy_domains.
+    caddy_all_domains: >-
+      {%- set out = caddy_domains | list -%}
+      {%- set seen = namespace(names=caddy_domains | map(attribute='name') | list) -%}
+      {%- for inst in caddy_user_instances | default([]) -%}
+      {%- set uname = inst.name | default(inst) -%}
+      {%- set ustate = inst.state | default(caddy_user_instances_state | default('present')) -%}
+      {%- for site in inst.sites | default([]) -%}
+      {%- for h in site.hosts -%}
+      {%- if h not in seen.names and not h.endswith('.invalid') -%}
+      {%- set best = namespace(len=0, dns=site.dns | default(none)) -%}
+      {%- if best.dns is none -%}
+      {%- for p in stalwart_domains if p.state | default('present') == 'present' and p.dns is defined and h.endswith('.' ~ p.name) -%}
+      {%- if p.name | length > best.len -%}{%- set best.len = p.name | length -%}{%- set best.dns = p.dns -%}{%- endif -%}
+      {%- endfor -%}
+      {%- endif -%}
+      {%- set entry = {'name': h, 'state': ustate, 'user': uname} -%}
+      {%- if best.dns is not none -%}{%- set _ = entry.update({'dns': best.dns}) -%}{%- endif -%}
+      {%- set _ = out.append(entry) -%}
+      {%- set seen.names = seen.names + [h] -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {%- endfor -%}
+      {%- endfor -%}
+      {{ out }}

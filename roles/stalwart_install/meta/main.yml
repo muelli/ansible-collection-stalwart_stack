@@ -1,5 +1,6 @@
 ---
 galaxy_info:
+  author: Tobias Mueller
   role_name: stalwart_install
   description: Install pinned Stalwart server and stalwart-cli binaries, systemd unit and data store config
   license: GPL-3.0-or-later

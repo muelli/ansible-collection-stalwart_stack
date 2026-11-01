@@ -1,5 +1,6 @@
 ---
 galaxy_info:
+  author: Tobias Mueller
   role_name: caddy_user_instances
   description: Socket-activated per-user Caddy instances reachable from the fronting Caddy through restricted UNIX sockets
   license: GPL-3.0-or-later

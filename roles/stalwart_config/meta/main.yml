@@ -1,5 +1,6 @@
 ---
 galaxy_info:
+  author: Tobias Mueller
   role_name: stalwart_config
   description: Declarative Stalwart configuration (listeners, domains, DNS providers, relays, routing) applied through stalwart-cli
   license: GPL-3.0-or-later

@@ -78,6 +78,7 @@
 - name: Pull the Bulwark image
   ansible.builtin.command:
     argv: [podman, pull, --quiet, "{{ bulwark_image_ref }}"]
+  changed_when: true
   when: bulwark_image_present.rc != 0
   notify: Restart Bulwark
 
