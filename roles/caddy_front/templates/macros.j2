@@ -14,6 +14,39 @@ dns {{ dns_provider }} {
 
 {% macro site_body(item) %}
 {% if item.kind == 'stalwart' %}
+{%   if stalwart_cors_origins | length > 0 %}
+{%     set cors_re = '^(?:' ~ (stalwart_cors_origins | map('regex_escape') | join('|')) ~ ')$' %}
+    @cors_preflight {
+        method OPTIONS
+        header_regexp cors Origin {{ cors_re }}
+    }
+    handle @cors_preflight {
+        header Access-Control-Allow-Origin "{http.request.header.Origin}"
+        header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS"
+        header Access-Control-Allow-Headers "Authorization, Content-Type, Accept, X-Requested-With"
+        header Access-Control-Max-Age 86400
+        header Vary Origin
+        respond 204
+    }
+    @cors_origin header_regexp cors Origin {{ cors_re }}
+    handle @cors_origin {
+        reverse_proxy {{ stalwart_http_proxyv2_listener }} {
+            transport http {
+                proxy_protocol v2
+            }
+            header_down Access-Control-Allow-Origin "{http.request.header.Origin}"
+            header_down Vary Origin
+        }
+    }
+    handle {
+        reverse_proxy {{ stalwart_http_proxyv2_listener }} {
+            transport http {
+                proxy_protocol v2
+            }
+            header_down -Access-Control-Allow-Origin
+        }
+    }
+{%   else %}
     handle {
         reverse_proxy {{ stalwart_http_proxyv2_listener }} {
             transport http {
@@ -21,6 +54,7 @@ dns {{ dns_provider }} {
             }
         }
     }
+{%   endif %}
 {% else %}
 {% if item.caddy_directive is defined and item.caddy_directive | length > 0 %}
 {{ item.caddy_directive | indent(4, true) }}

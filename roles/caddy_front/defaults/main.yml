@@ -88,6 +88,11 @@ dns_key_map: {}
 caddy_user_socket_dir: /run/caddy-user-sockets
 
 stalwart_http_proxyv2_listener: "{{ stalwart_http_proxy_bind | default('127.0.0.1:8008') }}"
+# Origins (scheme://host, exact) of browser apps that may call Stalwart across
+# origins, such as https://webmail.example.org for Bulwark. CORS has no
+# parent-domain rule; every origin is listed. Caddy answers the preflight and
+# sets the headers only for these; others get none. Empty: no CORS at all.
+stalwart_cors_origins: []
 stalwart_certs_dir: /etc/stalwart/certs
 stalwart_user: stalwart
 stalwart_group: stalwart

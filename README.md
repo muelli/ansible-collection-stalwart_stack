@@ -170,6 +170,16 @@ stalwart_applications:
     resource_url: https://example.org/app.zip
 ```
 
+### Browser apps and CORS
+
+CORS has no parent-domain rule: a browser compares the exact origin
+(`https://webmail.example.org`), so `example.org` does not cover its subdomains.
+List the origins of browser apps such as Bulwark in `stalwart_cors_origins`
+(`caddy_front`). Caddy then answers the preflight and sets
+`Access-Control-Allow-Origin` for those origins only, replacing what Stalwart
+adds, and sends no CORS headers to any other origin. Stalwart's own
+`Http.usePermissiveCors` (all origins) stays off (`stalwart_permissive_cors`).
+
 ## Removing things
 
 * Entries of `stalwart_domains`, `stalwart_relay_hosts`,
