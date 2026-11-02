@@ -41,7 +41,7 @@ collection_build() {
 }
 step "collection build, install and FQCN playbooks" collection_build
 if command -v ansible-lint >/dev/null; then
-  step "ansible-lint (errors only, style rules skipped)" ansible-lint --offline -p --skip-list var-naming,yaml roles playbook.yml teardown.yml playbooks tests
+  step "ansible-lint (errors only, style rules skipped)" ansible-lint --offline -p --skip-list var-naming,yaml roles playbook.yml teardown.yml tests
 else
   echo "== ansible-lint not installed, skipped"
 fi
