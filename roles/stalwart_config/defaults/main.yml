@@ -5,6 +5,7 @@
 
 # defaultHostname of the server (used in the SMTP greeting, MTA reports...).
 # stalwart_hostname: mail.example.org
+
 # Domain that SystemSettings.defaultDomainId points to. Defaults to the
 # first present entry of stalwart_domains.
 stalwart_default_domain: "{{ (stalwart_domains | selectattr('state', 'equalto', 'present') | map(attribute='name') | list | first) | default('') }}"
@@ -20,6 +21,7 @@ stalwart_default_domain: "{{ (stalwart_domains | selectattr('state', 'equalto', 
 # Caddy forwards everything on these hostnames to Stalwart; serve other sites
 # through caddy_domains.
 stalwart_domains: []
+
 # Where `/` on every Stalwart hostname redirects to (Http.redirectRoot; Stalwart
 # itself answers 404 there when it is unset, and defaults to /account). The
 # default is www. of the first present domain, which caddy_front serves with
@@ -27,15 +29,19 @@ stalwart_domains: []
 # it to a URL of your own, or "" to leave Stalwart's setting alone.
 stalwart_root_site: "{{ ('www.' ~ (stalwart_domains | selectattr('state', 'equalto', 'present') | map(attribute='name') | list | first)) if (stalwart_domains | selectattr('state', 'equalto', 'present') | list | length) > 0 else '' }}"
 stalwart_redirect_root: "{{ ('https://' ~ stalwart_root_site ~ '/') if stalwart_root_site | length > 0 else '' }}"
+
 # Stalwart's own switch (Http.usePermissiveCors) allows every origin. Leave it
 # off and list the webmail origin in caddy_front's stalwart_cors_origins instead.
 stalwart_permissive_cors: false
+
 # Entries of stalwart_domains, stalwart_relay_hosts and stalwart_server_listeners
 # with `state: absent` are destroyed in Stalwart. DNS providers that are no
 # longer wanted (names as in dns_key_map) go here:
 stalwart_absent_dns_providers: []
+
 # Filled in during the run: server ids of the domains to remove.
 stalwart_absent_domain_ids: {}
+
 # Outbound relays (smarthosts), created as Stalwart MtaRoute objects of type
 # Relay and matched by name. A relay does nothing until a rule in
 # sender_domain_routing below points a sender domain at it.
@@ -50,6 +56,7 @@ stalwart_absent_domain_ids: {}
 #     description: Mail via the example relay   # optional
 #     state: present                # default; absent destroys the relay in Stalwart
 stalwart_relay_hosts: []
+
 # Web applications Stalwart downloads (zip bundle) and serves under URL prefixes
 # (Application objects, matched by description; `state: absent` destroys one).
 # Stalwart's own interface (/admin, /account) exists by default and is not
@@ -62,6 +69,7 @@ stalwart_relay_hosts: []
 #     enable: true                  # default
 #     auto_update_interval: 7776000000
 stalwart_applications: []
+
 # Which sender domain is sent through which relay. The envelope sender domain
 # is compared, the first matching rule wins, mail for local recipients always
 # stays local, and everything else is delivered directly by MX lookup. Without
@@ -76,6 +84,7 @@ stalwart_applications: []
 # mail with the domain's own DKIM key; if the relay re-signs, publish the
 # provider's DKIM record as well.
 sender_domain_routing: []
+
 dns_key_map: {}
 
 # Certificates are written to this directory by caddy_front.
@@ -97,6 +106,7 @@ stalwart_force_apply: false
 # Loopback address of the HTTP listener Caddy talks to with PROXY protocol v2.
 stalwart_http_proxy_bind: "127.0.0.1:8008"
 stalwart_proxy_trusted_networks: ["127.0.0.1/32", "::1/128"]
+
 # SystemSettings.proxyTrustedNetworks applies to EVERY listener, including the
 # plain management listener, so it stays empty. Only the http-proxy listener
 # expects PROXY protocol, through its own overrideProxyTrustedNetworks.
