@@ -26,6 +26,7 @@ bulwark_port: 3000
 
 bulwark_settings_sync: false
 bulwark_telemetry: "off"
+
 # More environment variables, see the Bulwark environment reference.
 bulwark_extra_env: {}
 

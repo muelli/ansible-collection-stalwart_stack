@@ -67,6 +67,7 @@ stalwart_service_enabled: true
 # run Apache, nginx or a classic mail stack. Empty means leave everything alone.
 #   stalwart_conflicting_services: [apache2, postfix, dovecot, rspamd, opendkim]
 stalwart_conflicting_services: []
+
 # When a host is still in the matching DebOps service group the next DebOps run
 # would undo this, so the play fails instead.
 stalwart_check_debops_groups: true

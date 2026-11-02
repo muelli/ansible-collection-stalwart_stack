@@ -8,17 +8,21 @@
 #           file_server
 #     caddyfile: files/alice.Caddyfile   # optional; replaces the generated file
 caddy_user_instances: []
+
 # Default for entries without their own `state`; teardown.yml sets it to absent.
 caddy_user_instances_state: present
 
 # The accounts must exist already (for example created by DebOps).
 caddy_user_socket_dir: /run/caddy-user-sockets
 caddy_binary_path: /usr/local/bin/caddy
+
 # Account of the fronting Caddy; it joins each instance's primary group so it
 # can connect to the 0660 socket.
 caddy_front_user: caddy
+
 # The per-user Caddy stops after this long without traffic.
 caddy_user_idle_time: 30m
+
 # Request a page through the socket after deploying.
 caddy_user_smoke_test: true
 
