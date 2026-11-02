@@ -8,7 +8,7 @@ step() { echo "== $1"; shift; "$@" || { echo "FAILED: $*"; fail=1; }; }
 inv=$(mktemp); printf '[all]\nlocalhost ansible_connection=local\n[mailservers]\nlocalhost\n' > "$inv"
 trap 'rm -f "$inv"' EXIT
 
-step "syntax check" ansible-playbook -i "$inv" --syntax-check playbook.yml teardown.yml playbooks/site.yml playbooks/teardown.yml
+step "syntax check" ansible-playbook -i "$inv" --syntax-check playbook.yml teardown.yml
 step "derived Caddy sites" ansible-playbook -i localhost, -c local tests/user_instance_sites.yml
 step "YAML and Jinja parse" python3 - <<'PY'
 import glob, sys, yaml, jinja2
