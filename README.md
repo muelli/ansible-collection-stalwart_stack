@@ -231,6 +231,21 @@ Caddy site with a DNS-01 certificate from Spaceship.
 Not tested: push notifications (Stalwart to the Bulwark push relay), relays and
 sender routing against real servers, other distributions than Ubuntu 26.04.
 
+## Installing from Galaxy
+
+The roles ship as the collection `muelli.stalwart_stack`:
+
+```bash
+ansible-galaxy collection install muelli.stalwart_stack
+ansible-playbook -i inventory/hosts.ini muelli.stalwart_stack.site
+ansible-playbook -i inventory/hosts.ini muelli.stalwart_stack.teardown
+```
+
+Roles are also usable by their FQCN, for example
+`muelli.stalwart_stack.caddy_front`. Cloning the repository still works with
+`playbook.yml` and `teardown.yml`, which use the short role names. Version
+0.1.0 is a pre-release, see `CHANGELOG.md`.
+
 ## Tests
 
 `tests/run.sh` needs no target host: it syntax-checks `playbook.yml` and

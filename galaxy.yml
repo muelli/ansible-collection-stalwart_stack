@@ -1,0 +1,39 @@
+---
+namespace: muelli
+name: stalwart_stack
+version: 0.1.0
+readme: README.md
+authors:
+  - Tobias Mueller <muelli@cryptobitch.de>
+description: >-
+  Stalwart mail server behind Caddy, with socket-activated per-user Caddy
+  instances, a declarative Stalwart plan and optional Bulwark webmail.
+license:
+  - GPL-3.0-or-later
+tags:
+  - mail
+  - stalwart
+  - caddy
+  - webmail
+  - tls
+repository: https://github.com/muelli/caddy_fronting_stalwart
+documentation: https://github.com/muelli/caddy_fronting_stalwart#readme
+homepage: https://github.com/muelli/caddy_fronting_stalwart
+issues: https://github.com/muelli/caddy_fronting_stalwart/issues
+build_ignore:
+  - .git
+  - .gitignore
+  - "*.bak"
+  - "*.tar.gz"
+  - ansible.cfg
+  - hosts.ini
+  - .vault_pass
+  - "*.vault"
+  - secrets.yml
+  - .cache
+  - inventory
+  - group_vars
+  - templates
+  - tests
+  - playbook.yml
+  - teardown.yml

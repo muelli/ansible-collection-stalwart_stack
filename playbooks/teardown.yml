@@ -1,0 +1,19 @@
+---
+# Removes everything the roles installed, in reverse order. Data stays unless
+# you also pass -e stalwart_purge_data=true -e caddy_purge_data=true
+# -e bulwark_purge_data=true. The configuration inside Stalwart's database is
+# not touched; remove domains and relays with `state: absent` first if wanted.
+- name: Remove Stalwart, Caddy and Bulwark
+  hosts: mailservers
+  become: true
+  force_handlers: true
+  vars:
+    bulwark_state: absent
+    caddy_front_state: absent
+    stalwart_install_state: absent
+    caddy_user_instances_state: absent
+  roles:
+    - role: muelli.stalwart_stack.bulwark
+    - muelli.stalwart_stack.caddy_user_instances
+    - muelli.stalwart_stack.caddy_front
+    - muelli.stalwart_stack.stalwart_install

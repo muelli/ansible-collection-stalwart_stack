@@ -1,0 +1,16 @@
+---
+# Order matters: Caddy has to obtain the certificates before the Stalwart
+# plan references them, and the per-user sockets need the fronting Caddy.
+- name: Stalwart mail server behind Caddy
+  hosts: mailservers
+  become: true
+  # A failed run must still restart Caddy after a group change, or the next
+  # run would see no change and never restart it.
+  force_handlers: true
+  roles:
+    - muelli.stalwart_stack.stalwart_install
+    - muelli.stalwart_stack.caddy_front
+    - muelli.stalwart_stack.caddy_user_instances
+    - muelli.stalwart_stack.stalwart_config
+    - role: muelli.stalwart_stack.bulwark
+      when: bulwark_enabled | default(false) | bool
