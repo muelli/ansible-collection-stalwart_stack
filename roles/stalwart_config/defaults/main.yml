@@ -36,6 +36,19 @@ stalwart_permissive_cors: false
 stalwart_absent_dns_providers: []
 # Filled in during the run: server ids of the domains to remove.
 stalwart_absent_domain_ids: {}
+# Outbound relays (smarthosts), created as Stalwart MtaRoute objects of type
+# Relay and matched by name. A relay does nothing until a rule in
+# sender_domain_routing below points a sender domain at it.
+#   - name: examplerelay            # referenced by `route:` in sender_domain_routing
+#     address: relay.example.net    # host name or IP of the relay
+#     port: 587                     # default 25
+#     protocol: smtp                # default
+#     implicit_tls: false           # default; true for TLS from the first byte (port 465)
+#     allow_invalid_certs: false    # default; true only for a relay with a self-signed cert
+#     auth_username: relayuser      # optional, together with auth_secret
+#     auth_secret: "{{ vault_relay_secret }}"   # keep it in an Ansible vault, never in plain text
+#     description: Mail via the example relay   # optional
+#     state: present                # default; absent destroys the relay in Stalwart
 stalwart_relay_hosts: []
 # Web applications Stalwart downloads (zip bundle) and serves under URL prefixes
 # (Application objects, matched by description; `state: absent` destroys one).
@@ -49,6 +62,19 @@ stalwart_relay_hosts: []
 #     enable: true                  # default
 #     auto_update_interval: 7776000000
 stalwart_applications: []
+# Which sender domain is sent through which relay. The envelope sender domain
+# is compared, the first matching rule wins, mail for local recipients always
+# stays local, and everything else is delivered directly by MX lookup. Without
+# a matching rule there is no relay.
+#   - domain: bar.example           # domain mail is sent from
+#     route: examplerelay           # `name` of an entry of stalwart_relay_hosts
+#     state: present                # default; absent drops the rule
+# Notes: such a domain must not set `dns:` in stalwart_domains, because the
+# automatic DNS records would overwrite its SPF record. Publish SPF yourself and
+# include what the relay provider asks for (for example
+# `v=spf1 mx include:spf.relay.example.net -all`). Stalwart still signs the
+# mail with the domain's own DKIM key; if the relay re-signs, publish the
+# provider's DKIM record as well.
 sender_domain_routing: []
 dns_key_map: {}
 
