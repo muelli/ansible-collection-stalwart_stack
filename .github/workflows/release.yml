@@ -1,0 +1,35 @@
+# Publishes the collection to Ansible Galaxy when a tag like v0.1.0 is pushed.
+# Needs the repository secret GALAXY_API_KEY (an API token from
+# galaxy.ansible.com). The "galaxy" environment can require your approval.
+name: Release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    environment: galaxy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ansible-core ansible-lint pyyaml jinja2
+      - run: tests/run.sh
+      - name: Tag must match galaxy.yml and the changelog
+        run: |
+          version=$(python3 -c "import yaml; print(yaml.safe_load(open('galaxy.yml'))['version'])")
+          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME != galaxy.yml version $version"; exit 1; }
+          grep -q "^## $version\$" CHANGELOG.md || { echo "CHANGELOG.md has no section for $version"; exit 1; }
+      - name: Build
+        run: ansible-galaxy collection build --output-path dist .
+      - name: Publish to Galaxy
+        env:
+          GALAXY_API_KEY: ${{ secrets.GALAXY_API_KEY }}
+        run: ansible-galaxy collection publish dist/*.tar.gz --token "$GALAXY_API_KEY"
+      - name: GitHub release with the tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/*.tar.gz --title "$GITHUB_REF_NAME" --notes-file CHANGELOG.md

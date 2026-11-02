@@ -246,6 +246,13 @@ Roles are also usable by their FQCN, for example
 `playbook.yml` and `teardown.yml`, which use the short role names. Version
 0.1.0 is a pre-release, see `CHANGELOG.md`.
 
+### Releasing
+
+Bump `version` in `galaxy.yml`, add a `## <version>` section to `CHANGELOG.md`,
+commit, then `git tag v<version> && git push origin v<version>`. The Release
+workflow runs the tests, builds, publishes to Galaxy and creates a GitHub
+release. It needs the repository secret `GALAXY_API_KEY`.
+
 ## Tests
 
 `tests/run.sh` needs no target host: it syntax-checks `playbook.yml` and
