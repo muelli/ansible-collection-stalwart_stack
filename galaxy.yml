@@ -16,10 +16,10 @@ tags:
   - caddy
   - webmail
   - tls
-repository: https://github.com/muelli/caddy_fronting_stalwart
-documentation: https://github.com/muelli/caddy_fronting_stalwart#readme
-homepage: https://github.com/muelli/caddy_fronting_stalwart
-issues: https://github.com/muelli/caddy_fronting_stalwart/issues
+repository: https://github.com/muelli/ansible-collection-stalwart_stack
+documentation: https://github.com/muelli/ansible-collection-stalwart_stack#readme
+homepage: https://github.com/muelli/ansible-collection-stalwart_stack
+issues: https://github.com/muelli/ansible-collection-stalwart_stack/issues
 build_ignore:
   - .git
   - .gitignore
