@@ -66,7 +66,9 @@ on x86_64 or aarch64 with systemd.
 * The plan contains DNS and relay secrets; it is written `0600` and hidden from
   Ansible output. The fallback admin password (>= 12 characters) is required.
 * Domains with a relay in `sender_domain_routing` must not set `dns:`;
-  automatic DNS would overwrite their SPF record. The role fails on that.
+  automatic DNS would overwrite their SPF record. The role fails on that, unless
+  the relay has `manages_spf: true` (it sends with its own return-path domain,
+  as SMTP2GO does).
 * `caddy_user_instances` expects the accounts to exist (DebOps can create them).
 * New Stalwart or CLI versions need their sha256 in `stalwart_checksums` /
   `stalwart_cli_checksums`, or set `stalwart_checksum` / `stalwart_cli_checksum`.

@@ -1,0 +1,24 @@
+---
+# Stalwart publishes SPF for domains with `dns:` and would overwrite one that
+# lets a relay send. That only matters when the relay uses the sender's domain
+# as the envelope sender. A relay with `manages_spf: true` uses its own
+# return-path domain (SMTP2GO, for example), so SPF of the sender domain is not
+# consulted and the automatic record does no harm.
+- name: Reject relay and routing combinations that break SPF
+  ansible.builtin.fail:
+    msg: >-
+      Domain '{{ item.name }}' sends through an external relay (sender_domain_routing) but also
+      has automatic DNS management ('dns: {{ item.dns }}'). Stalwart would overwrite its SPF record
+      with the local address. Remove 'dns' for that domain and manage its records manually, or set
+      'manages_spf: true' on the relay if it sends with its own return-path domain.
+  loop: "{{ stalwart_domains }}"
+  loop_control:
+    label: "{{ item.name }}"
+  vars:
+    # `state` is optional on a rule, so filter on the default instead of the attribute.
+    _active_rules: "{{ sender_domain_routing | default([]) | selectattr('state', 'undefined') | list + sender_domain_routing | default([]) | selectattr('state', 'defined') | rejectattr('state', 'equalto', 'absent') | list }}"
+    _relays_with_own_spf: "{{ stalwart_relay_hosts | selectattr('manages_spf', 'defined') | selectattr('manages_spf') | map(attribute='name') | list }}"
+  when:
+    - item.state | default('present', true) == 'present'
+    - item.dns is defined
+    - item.name in (_active_rules | rejectattr('route', 'in', _relays_with_own_spf) | map(attribute='domain') | list)

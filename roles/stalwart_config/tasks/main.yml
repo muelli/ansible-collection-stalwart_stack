@@ -28,18 +28,7 @@
   when: not item.stat.exists
 
 - name: Reject relay and routing combinations that break SPF
-  ansible.builtin.fail:
-    msg: >-
-      Domain '{{ item.name }}' sends through an external relay (sender_domain_routing) but also
-      has automatic DNS management ('dns: {{ item.dns }}'). Stalwart would overwrite its SPF record
-      with the local address. Remove 'dns' for that domain and manage its records manually.
-  loop: "{{ stalwart_domains }}"
-  loop_control:
-    label: "{{ item.name }}"
-  when:
-    - item.state | default('present', true) == 'present'
-    - item.dns is defined
-    - item.name in (sender_domain_routing | default([]) | rejectattr('state', 'equalto', 'absent') | map(attribute='domain') | list)
+  ansible.builtin.include_tasks: check_relay_spf.yml
 
 - name: Check whether the server has been bootstrapped before
   ansible.builtin.stat:

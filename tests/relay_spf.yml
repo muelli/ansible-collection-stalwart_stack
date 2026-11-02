@@ -1,0 +1,36 @@
+---
+# Offline test of roles/stalwart_config/tasks/check_relay_spf.yml.
+- name: SPF check for relays
+  hosts: localhost
+  gather_facts: false
+  vars:
+    stalwart_domains:
+      - {name: a.example, state: present, dns: spaceship}
+      - {name: b.example, state: present, dns: spaceship}
+      - {name: c.example, state: present}
+    stalwart_relay_hosts:
+      - {name: own, address: r1.example}
+      - {name: theirs, address: r2.example, manages_spf: true}
+  tasks:
+    - name: Domain with dns routed through a plain relay must fail
+      block:
+        - name: Run the check
+          ansible.builtin.include_tasks: ../roles/stalwart_config/tasks/check_relay_spf.yml
+          vars:
+            sender_domain_routing: [{domain: a.example, route: own}]
+        - name: The check did not fail
+          ansible.builtin.set_fact: {plain_rejected: false}
+      rescue:
+        - name: The check failed as expected
+          ansible.builtin.set_fact: {plain_rejected: true}
+    - name: Domain with dns routed through a relay with its own SPF passes
+      ansible.builtin.include_tasks: ../roles/stalwart_config/tasks/check_relay_spf.yml
+      vars:
+        sender_domain_routing: [{domain: b.example, route: theirs, state: present}]
+    - name: Domain without dns passes whatever relay
+      ansible.builtin.include_tasks: ../roles/stalwart_config/tasks/check_relay_spf.yml
+      vars:
+        sender_domain_routing: [{domain: c.example, route: own}]
+    - name: Only the plain relay was rejected
+      ansible.builtin.assert:
+        that: plain_rejected

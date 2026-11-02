@@ -53,6 +53,8 @@ stalwart_absent_domain_ids: {}
 #     allow_invalid_certs: false    # default; true only for a relay with a self-signed cert
 #     auth_username: relayuser      # optional, together with auth_secret
 #     auth_secret: "{{ vault_relay_secret }}"   # keep it in an Ansible vault, never in plain text
+#     manages_spf: false            # default; true if the relay sends with its own return-path
+#                                   # domain (SMTP2GO, ...), see sender_domain_routing below
 #     description: Mail via the example relay   # optional
 #     state: present                # default; absent destroys the relay in Stalwart
 stalwart_relay_hosts: []
@@ -80,7 +82,10 @@ stalwart_applications: []
 # Notes: such a domain must not set `dns:` in stalwart_domains, because the
 # automatic DNS records would overwrite its SPF record. Publish SPF yourself and
 # include what the relay provider asks for (for example
-# `v=spf1 mx include:spf.relay.example.net -all`). Stalwart still signs the
+# `v=spf1 mx include:spf.relay.example.net -all`). Exception: with
+# `manages_spf: true` on the relay the check is skipped. Providers that verify
+# the domain with their own return-path CNAME (SMTP2GO) make SPF of the sender
+# domain irrelevant for relayed mail, and DMARC still aligns on the subdomain. Stalwart still signs the
 # mail with the domain's own DKIM key; if the relay re-signs, publish the
 # provider's DKIM record as well.
 sender_domain_routing: []
