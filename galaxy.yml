@@ -1,7 +1,7 @@
 ---
 namespace: muelli
 name: stalwart_stack
-version: 0.1.0
+version: 0.1.1
 readme: README.md
 authors:
   - Tobias Mueller <muelli@cryptobitch.de>
@@ -26,6 +26,8 @@ build_ignore:
   - "*.bak"
   - "*.tar.gz"
   - ansible.cfg
+  - Justfile
+  - build
   - hosts.ini
   - .vault_pass
   - "*.vault"
