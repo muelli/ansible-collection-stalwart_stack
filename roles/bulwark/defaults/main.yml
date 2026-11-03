@@ -4,7 +4,7 @@
 # it: add a site with `caddy_directive: reverse_proxy 127.0.0.1:3000`.
 
 # Needs Stalwart 1.0 with Bulwark >= 1.18.0.
-bulwark_version: "1.18.0"
+bulwark_version: "1.20.0"
 bulwark_image: ghcr.io/bulwarkmail/webmail
 # Optional: pin the image by digest as well (sha256:...), checked by podman.
 bulwark_image_digest: ""

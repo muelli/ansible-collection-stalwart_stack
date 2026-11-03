@@ -216,8 +216,10 @@ adds, and sends no CORS headers to any other origin. Stalwart's own
 
 ## Tested
 
-Ubuntu 26.04 VM, ansible-core 2.21.5, Stalwart 1.0.0, stalwart-cli 1.0.14,
-Caddy with its internal CA: fresh install, repeat run without changes,
+Ubuntu 26.04 VM, ansible-core 2.21.5, Stalwart 1.0.0 (fresh install) and 1.0.2
+(upgrade from 1.0.1, repeat run without changes), stalwart-cli 1.0.14, Bulwark
+1.20.0 (upgrade from 1.18.0; its readiness check cannot reach Stalwart on the
+VM, which has an internal CA), Caddy with its internal CA: fresh install, repeat run without changes,
 fallback to recovery, forced apply through the management listener, web path
 Caddy -> Stalwart (PROXY v2) and Caddy -> user socket -> user Caddy, socket
 unreachable for other users, certificate sync and reload.
