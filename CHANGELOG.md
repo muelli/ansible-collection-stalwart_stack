@@ -5,6 +5,9 @@
 - `stalwart_domains[].catch_all` sets Stalwart's catch-all address
   (`Domain.catchAllAddress`) for a domain. Leaving it out keeps the server's
   value; `null` or `""` clears it.
+- caddy_front runs `caddy validate` before restarting or reloading Caddy. A bad
+  config now fails the play with Caddy's own error and leaves the running Caddy
+  alone; `caddy run` only exits with status 1 and the journal shows no reason.
 
 ## 0.1.1
 

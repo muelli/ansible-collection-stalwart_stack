@@ -3,12 +3,46 @@
   ansible.builtin.systemd_service:
     daemon_reload: true
 
+# Runs once before the restart or reload (handlers run in file order), so a bad
+# config fails the play with Caddy's own message: `caddy run` only exits with
+# status 1 and the journal says nothing about why.
+- name: Check for the Caddy environment file
+  ansible.builtin.stat:
+    path: "{{ caddy_config_dir }}/dns.env"
+  register: caddy_dns_env
+  listen:
+    - Restart Caddy
+    - Reload Caddy
+
+- name: Validate the Caddy configuration
+  ansible.builtin.command:
+    argv: "{{ [caddy_binary_path, 'validate', '--config', caddy_config_dir ~ '/Caddyfile'] + (['--envfile', caddy_config_dir ~ '/dns.env'] if caddy_dns_env.stat.exists else []) }}"
+  register: caddy_validate
+  changed_when: false
+  failed_when: false
+  listen:
+    - Restart Caddy
+    - Reload Caddy
+
 - name: Restart Caddy
   ansible.builtin.systemd_service:
     name: caddy
     state: restarted
+  when: caddy_validate.rc == 0
 
 - name: Reload Caddy
   ansible.builtin.systemd_service:
     name: caddy
     state: reloaded
+  when: caddy_validate.rc == 0
+
+# A restart with a broken config would take a running Caddy down (a reload keeps
+# the old config running). Both are skipped, since a failed reload only says "Job
+# for caddy.service failed", and the play fails here with Caddy's own message.
+- name: Fail on an invalid Caddy configuration
+  ansible.builtin.fail:
+    msg: "caddy validate failed, Caddy was not restarted or reloaded: {{ caddy_validate.stderr_lines | last | default(caddy_validate.stderr) }}"
+  when: caddy_validate.rc != 0
+  listen:
+    - Restart Caddy
+    - Reload Caddy
