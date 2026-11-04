@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `stalwart_domains[].catch_all` sets Stalwart's catch-all address
+  (`Domain.catchAllAddress`) for a domain. Leaving it out keeps the server's
+  value; `null` or `""` clears it.
+
 ## 0.1.1
 
 - Stalwart 1.0.2 (checksums for x86_64 and aarch64) and Bulwark 1.20.0 are the

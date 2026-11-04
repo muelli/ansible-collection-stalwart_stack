@@ -17,6 +17,10 @@ stalwart_default_domain: "{{ (stalwart_domains | selectattr('state', 'equalto', 
 #   zone_origin: example.org  # DNS zone at the provider if it is a parent of `name`
 #                           # (Stalwart's "Zone Origin"); needed for subdomains of a zone
 #   subdomains: [...]       # mta-sts, autoconfig, ... sites, see caddy_front
+#   catch_all: postmaster@example.org  # receives mail for unknown local recipients of this
+#                           # domain (Domain.catchAllAddress); must be an existing address.
+#                           # Left out, the server's value is kept; null (`catch_all: ~`)
+#                           # or "" clears it
 #   wildcard: false         # no wildcard certificate (default: one per domain with dns), see caddy_front
 # Caddy forwards everything on these hostnames to Stalwart; serve other sites
 # through caddy_domains.
