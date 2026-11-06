@@ -192,14 +192,14 @@
     mode: "0644"
   vars:
     item: "{{ caddy_root_site }}"
-  when: caddy_root_site | length > 0
+  when: stalwart_root_site | length > 0
   notify: Reload Caddy
 
 - name: Remove the root site when it is disabled
   ansible.builtin.file:
     path: "{{ caddy_conf_dir }}/_root.conf"
     state: absent
-  when: caddy_root_site | length == 0
+  when: stalwart_root_site | length == 0
   notify: Reload Caddy
 
 - name: Write the site files of other domains
