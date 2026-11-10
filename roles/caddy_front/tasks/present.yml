@@ -87,20 +87,26 @@
       {%- endfor -%}
       {{ out }}
 
+- name: Work out which names Caddy and Stalwart both want
+  ansible.builtin.set_fact:
+    caddy_clashing_names: >-
+      {%- set caddy_names = caddy_all_domains | rejectattr('state', 'equalto', 'absent') | map(attribute='name') | list -%}
+      {%- set stalwart_names = (stalwart_domains + caddy_stalwart_subdomain_sites)
+                               | selectattr('state', 'equalto', 'present') | map(attribute='name') | list -%}
+      {%- set clashes = caddy_names | intersect(stalwart_names) -%}
+      {%- if stalwart_root_site | length > 0 and stalwart_root_site in (caddy_names + stalwart_names) -%}
+      {%-   set clashes = clashes + [stalwart_root_site] -%}
+      {%- endif -%}
+      {{ clashes | unique | list }}
+
 - name: Check that no Caddy site clashes with a Stalwart name
   ansible.builtin.assert:
-    that:
-      - >-
-        (caddy_all_domains | rejectattr('state', 'equalto', 'absent') | map(attribute='name') | list)
-        | intersect((stalwart_domains + caddy_stalwart_subdomain_sites) | selectattr('state', 'equalto', 'present') | map(attribute='name') | list)
-        | length == 0
-      - >-
-        stalwart_root_site not in (caddy_all_domains | rejectattr('state', 'equalto', 'absent') | map(attribute='name') | list
-        + (stalwart_domains + caddy_stalwart_subdomain_sites) | selectattr('state', 'equalto', 'present') | map(attribute='name') | list)
+    that: caddy_clashing_names | length == 0
     fail_msg: >-
-      caddy_domains and the hosts of caddy_user_instances must not contain names of stalwart_domains,
-      their subdomain sites or the root site {{ stalwart_root_site }} (everything on Stalwart
-      hostnames goes to Stalwart).
+      These names are used both by Stalwart and by a Caddy site: {{ caddy_clashing_names | join(', ') }}.
+      Stalwart owns each stalwart_domains name, its subdomain sites and the root site
+      ({{ stalwart_root_site | default('none', true) }}), so caddy_domains and the hosts of
+      caddy_user_instances must use other names (everything on those hostnames goes to Stalwart).
 
 - name: Work out which Caddy certificate serves each Stalwart name
   ansible.builtin.set_fact:

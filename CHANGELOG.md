@@ -8,6 +8,8 @@
 - caddy_front runs `caddy validate` before restarting or reloading Caddy. A bad
   config now fails the play with Caddy's own error and leaves the running Caddy
   alone; `caddy run` only exits with status 1 and the journal shows no reason.
+- caddy_front's name-clash check names the clashing hostnames in its failure
+  message.
 
 ## 0.1.1
 
