@@ -10,6 +10,12 @@
   alone; `caddy run` only exits with status 1 and the journal shows no reason.
 - caddy_front's name-clash check names the clashing hostnames in its failure
   message.
+- Stalwart 1.1.0 (checksums for x86_64 and aarch64), Bulwark 1.21.0 and Caddy
+  v2.11.9 are the new defaults; stalwart-cli stays at 1.0.14, its latest release.
+  Stalwart 1.1.0 adds passkeys, which need the new `sysPasskey*` permissions in
+  default roles created by an earlier version: start the server once with
+  `STALWART_UPDATE_ROLE_PERMISSIONS=true` to add them. Nothing in these roles
+  needs them.
 
 ## 0.1.1
 

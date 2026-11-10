@@ -31,7 +31,7 @@ caddy_domains:
     user: alice
 
 # Pinned build on the controller (see README). Versions a real build resolved
-# on 2026-10-28; Caddy itself defaults to v2.11.7. Other providers, for example
+# on 2026-10-28; Caddy itself defaults to v2.11.9. Other providers, for example
 # github.com/caddy-dns/gandi@v1.2.1 or github.com/caddy-dns/porkbun@v0.3.1.
 caddy_build_method: xcaddy
 caddy_xcaddy_modules:

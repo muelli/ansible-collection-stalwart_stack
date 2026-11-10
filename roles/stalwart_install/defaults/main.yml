@@ -3,10 +3,13 @@
 # together. The sha256 sums below are the digests GitHub publishes for the
 # release assets; an unlisted version fails unless you provide
 # stalwart_checksum / stalwart_cli_checksum yourself.
-stalwart_version: "1.0.2"
+stalwart_version: "1.1.0"
 stalwart_cli_version: "1.0.14"
 
 stalwart_checksums:
+  "1.1.0":
+    x86_64: "sha256:62e6fdaf68f6ddfb45aa0dc1c28578a7e05f1e5e9a0c95fccfe1eae709d4ecbc"
+    aarch64: "sha256:e1ff640f0d3800d72a04916e7b402f19e28e9106ed3ed719a876d238d9f73567"
   "1.0.2":
     x86_64: "sha256:10bd375d4541e2ffbafdfd5d97d8aa1a5c188438fd8700fbd6f076ee0fc2f24f"
     aarch64: "sha256:79864acfd055d8fba52e636cde4821453669a0cc222975a607d392740be8fdae"

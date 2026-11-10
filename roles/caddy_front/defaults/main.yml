@@ -23,8 +23,8 @@ caddy_download_url: >-
 caddy_xcaddy_modules: []
 caddy_xcaddy_replaces: []
 
-# A version such as v2.11.7, or "latest". Pinned by default for reproducible builds.
-caddy_xcaddy_caddy_version: v2.11.7
+# A version such as v2.11.9, or "latest". Pinned by default for reproducible builds.
+caddy_xcaddy_caddy_version: v2.11.9
 
 # podman: run the official caddy builder image with --rm, so the controller
 #         needs neither Go nor xcaddy (only podman).
