@@ -11,6 +11,7 @@ argument_specs:
         options:
           name: {type: str, required: true, description: "The account."}
           state: {type: str, choices: [present, absent], description: "Defaults to caddy_user_instances_state."}
+          hosts: {type: list, elements: str, default: [], description: "The names the root Caddy forwards to this account, everything on them; '*.example.org' for a wildcard (needs dns). What the account does with them is its own business."}
           sites:
             type: list
             elements: dict
@@ -19,7 +20,7 @@ argument_specs:
             options:
               name: {type: str, description: "File name without .conf; defaults to the first host."}
               state: {type: str, default: present, choices: [present, absent], description: "absent removes the file and the front site of its hosts."}
-              hosts: {type: list, elements: str, description: "Names the fronting Caddy forwards to this account; required unless the site is absent."}
+              hosts: {type: list, elements: str, description: "Hosts this site block answers; default: all hosts of the instance."}
               directive: {type: str, description: "Body of the site block, as in a Caddyfile."}
               dns: {type: str, description: "DNS provider for the certificate of these hosts (a key of dns_key_map); default from the Stalwart domain they lie below."}
           purge: {type: bool, default: false, description: "With state absent, also delete ~/.config/caddy."}

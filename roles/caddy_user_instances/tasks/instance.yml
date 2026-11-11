@@ -7,12 +7,15 @@
 - name: Resolve the instance settings
   ansible.builtin.set_fact:
     _caddy_user: "{{ caddy_user_item.name | default(caddy_user_item) }}"
-    # Every site gets a name (the file conf.d/<name>.conf) and a state.
+    # What the root Caddy forwards to this account (caddy_front reads the same list).
+    _caddy_user_hosts: "{{ caddy_user_item.hosts | default([]) }}"
+    # Every site gets a name (the file conf.d/<name>.conf), a state and, unless it
+    # lists its own, all the hosts of the instance.
     _caddy_user_sites: >-
       {%- set r = [] -%}
       {%- for s in caddy_user_item.sites | default([]) -%}
-      {%- set n = s.name | default((s.hosts | default(['site']) | first) | regex_replace('[^A-Za-z0-9._-]', '_')) -%}
-      {%- set _ = r.append(s | combine({'name': n, 'state': s.state | default('present')})) -%}
+      {%- set n = s.name | default(((s.hosts | default(caddy_user_item.hosts | default(['site']))) | first) | regex_replace('[^A-Za-z0-9._-]', '_')) -%}
+      {%- set _ = r.append(s | combine({'name': n, 'state': s.state | default('present'), 'hosts': s.hosts | default(caddy_user_item.hosts | default([]))})) -%}
       {%- endfor -%}
       {{ r }}
 
@@ -20,10 +23,10 @@
   ansible.builtin.assert:
     that:
       - _caddy_user_sites | map(attribute='name') | list | length == _caddy_user_sites | map(attribute='name') | list | unique | length
-      - _caddy_user_sites | selectattr('state', 'equalto', 'present') | rejectattr('hosts', 'defined') | list | length == 0
+      - _caddy_user_sites | selectattr('state', 'equalto', 'present') | selectattr('hosts', 'equalto', []) | list | length == 0
     fail_msg: >-
       The sites of {{ _caddy_user }} need distinct names (the file conf.d/<name>.conf) and
-      every present site needs hosts.
+      hosts: their own, or `hosts:` on the instance.
 
 - name: Look up and prepare the account
   ansible.builtin.include_tasks: account.yml

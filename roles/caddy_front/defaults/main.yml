@@ -92,12 +92,11 @@ stalwart_domains: []
 # Caddy over /run/caddy-user-sockets/alice.sock, or a directive. A name
 # must not also be the Stalwart host name, a subdomain site of a mail domain, or
 # a mail domain with `serve_http: true`.
-# Every host of caddy_user_instances[].sites[].hosts is added automatically as a
-# site that forwards to that user (state follows the instance, or the site when it is absent). Listing it in
+# Every name in caddy_user_instances[].hosts is added automatically as a site
+# that forwards everything to that user (state follows the instance). Listing it in
 # caddy_domains as well is fine: that entry wins and is used as written, so use
 # it to set `dns:` or other options. The DNS provider of an automatic site is the
-# site's own `dns:`, else that of the longest Stalwart domain it lies below, else
-# none. Sites written by hand in the account's conf.d have no known hosts.
+# longest Stalwart domain it lies below, else none.
 
 caddy_domains: []
 

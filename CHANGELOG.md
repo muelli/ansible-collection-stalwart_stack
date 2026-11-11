@@ -50,6 +50,11 @@
   The `caddyfile:` key and the default hello page are gone. A site whose state is
   `absent` also removes its front site. The role's tasks are split into
   `account.yml`, `config.yml`, `units.yml` and `smoke.yml`.
+- Breaking: the hosts a user's Caddy receives are set on the instance
+  (`caddy_user_instances[].hosts`), not derived from its sites: the root decides
+  which names go to which account and forwards everything on them. A site's own
+  `hosts` default to all of them and select what that conf.d file answers; its
+  `dns:` is gone (use the Stalwart domain or a `caddy_domains` entry).
 - `caddy_directive` of `caddy_domains` entries is now `directive`, as in the
   sites of `caddy_user_instances`.
 - `stalwart_install_vandelay: true` installs Vandelay 1.0.15, Stalwart's account

@@ -1,35 +1,30 @@
 ---
 - name: Add the hosts of the user Caddy instances as sites
   ansible.builtin.set_fact:
-    # Every host of caddy_user_instances[].sites[].hosts becomes a site that
-    # forwards to that user's socket, so it needs listing only there. A
-    # caddy_domains entry of the same name wins and is used as written. The DNS
-    # provider is the site's own `dns:`, else that of the longest Stalwart
-    # domain the host lies below, else none (HTTP-01 / TLS-ALPN-01). Sites
-    # written by hand in the account's conf.d have no known hosts; list them in
-    # caddy_domains.
+    # Every name in caddy_user_instances[].hosts becomes a site that forwards
+    # everything to that user's socket; what the account does with it is up to
+    # the account. A caddy_domains entry of the same name wins and is used as
+    # written (set `dns:` there). The DNS provider is that of the longest Stalwart
+    # domain the host lies below, else none (HTTP-01 / TLS-ALPN-01).
     caddy_all_domains: >-
       {%- set out = caddy_domains | list -%}
       {%- set seen = namespace(names=caddy_domains | map(attribute='name') | list) -%}
       {%- for inst in caddy_user_instances | default([]) -%}
       {%- set uname = inst.name | default(inst) -%}
       {%- set ustate = inst.state | default(caddy_user_instances_state | default('present')) -%}
-      {%- for site in inst.sites | default([]) -%}
-      {%- for h in site.hosts -%}
+      {%- for h in inst.hosts | default([]) -%}
       {%- if h not in seen.names and not h.endswith('.invalid') -%}
-      {%- set best = namespace(len=0, dns=site.dns | default(none)) -%}
+      {%- set best = namespace(len=0, dns=none) -%}
       {%- if best.dns is none -%}
       {%- for p in stalwart_domains if p.state | default('present') == 'present' and p.dns is defined and h.endswith('.' ~ p.name) -%}
       {%- if p.name | length > best.len -%}{%- set best.len = p.name | length -%}{%- set best.dns = p.dns -%}{%- endif -%}
       {%- endfor -%}
       {%- endif -%}
-      {%- set sstate = 'absent' if site.state | default('present') == 'absent' else ustate -%}
-      {%- set entry = {'name': h, 'state': sstate, 'user': uname} -%}
+      {%- set entry = {'name': h, 'state': ustate, 'user': uname} -%}
       {%- if best.dns is not none -%}{%- set _ = entry.update({'dns': best.dns}) -%}{%- endif -%}
       {%- set _ = out.append(entry) -%}
       {%- set seen.names = seen.names + [h] -%}
       {%- endif -%}
-      {%- endfor -%}
       {%- endfor -%}
       {%- endfor -%}
       {{ out }}

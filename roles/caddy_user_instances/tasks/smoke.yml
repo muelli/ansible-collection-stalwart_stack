@@ -2,7 +2,7 @@
 # Needs a host to ask for: the first host of the first present site.
 - name: Work out the host to request
   ansible.builtin.set_fact:
-    _caddy_smoke_host: "{{ (_caddy_user_sites | selectattr('state', 'equalto', 'present') | map(attribute='hosts') | flatten | reject('match', '^\\*') | first) | default('') }}"
+    _caddy_smoke_host: "{{ ((_caddy_user_hosts + (_caddy_user_sites | selectattr('state', 'equalto', 'present') | map(attribute='hosts') | flatten | list)) | reject('match', '^\\*') | first) | default('') }}"
 
 - name: Request a page through the front socket
   when: _caddy_smoke_host | length > 0

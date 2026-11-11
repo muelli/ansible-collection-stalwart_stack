@@ -10,27 +10,18 @@
       - { name: a.test.example.org, state: present, dns: other }
     caddy_user_instances:
       - name: muelli
+        hosts: [muelli.test.example.org, www.muelli.test.example.org, x.a.test.example.org, other.net, bare.invalid]
         sites:
-          - hosts: [muelli.test.example.org, www.muelli.test.example.org]
-          - hosts: [x.a.test.example.org]
-          - hosts: [other.net, bare.invalid]
-            dns: own
-      - { name: gone, state: absent, sites: [{ hosts: [gone.test.example.org] }] }
-      - { name: plainname }
-      - { name: nosites }
-      - name: partial
-        sites:
-          - { name: on, hosts: [on.test.example.org] }
-          - { name: off, state: absent, hosts: [off.test.example.org] }
+          - { name: web, hosts: [muelli.test.example.org] }
+      - { name: gone, state: absent, hosts: [gone.test.example.org] }
+      - { name: nohosts }
     # Expected result for caddy_domains: []
     expected:
       muelli.test.example.org: { state: present, user: muelli, dns: spaceship }
       www.muelli.test.example.org: { state: present, user: muelli, dns: spaceship }
       x.a.test.example.org: { state: present, user: muelli, dns: other }
-      other.net: { state: present, user: muelli, dns: own }
+      other.net: { state: present, user: muelli }
       gone.test.example.org: { state: absent, user: gone, dns: spaceship }
-      on.test.example.org: { state: present, user: partial, dns: spaceship }
-      off.test.example.org: { state: absent, user: partial, dns: spaceship }
   tasks:
     - name: Derive with nothing listed in caddy_domains
       ansible.builtin.include_tasks: ../roles/caddy_front/tasks/user_instance_sites.yml
@@ -44,7 +35,7 @@
           - caddy_all_domains | map(attribute='name') | list | sort == expected.keys() | list | sort
           - item.state == expected[item.name].state
           - item.user == expected[item.name].user
-          - item.dns == expected[item.name].dns
+          - item.dns | default(none) == expected[item.name].dns | default(none)
       loop: "{{ caddy_all_domains }}"
       loop_control:
         label: "{{ item.name }}"

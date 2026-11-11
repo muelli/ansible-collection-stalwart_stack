@@ -33,13 +33,12 @@ on x86_64 or aarch64 with systemd.
   `stalwart-cert-sync@<domain>.path` copies a renewed certificate to
   `/etc/stalwart/certs` and asks Stalwart to reload it.
 * `caddy_domains` entries with `user: alice` are forwarded to
-  `/run/caddy-user-sockets/alice.sock`. The hosts of a `caddy_user_instances`
-  entry (`sites[].hosts`) get such a site automatically, so they only have to be
-  listed once; a `caddy_domains` entry of the same name takes precedence (for
-  `dns:` or other options). The DNS provider defaults to the site's `dns:`, else
+  `/run/caddy-user-sockets/alice.sock`. The `hosts` of a `caddy_user_instances`
+  entry get such a site automatically: root decides which names go to which
+  account, and everything on them is forwarded. A `caddy_domains` entry of the
+  same name takes precedence (for `dns:` or other options). The DNS provider is
   the one of the longest Stalwart domain the host lies below, else none
-  (HTTP-01). Sites you write by hand in the account's `conf.d` need their hosts in
-  `caddy_domains` (`user: alice`). systemd creates that socket (mode
+  (HTTP-01). systemd creates that socket (mode
   `0660`, group `alice`; the front Caddy joins the group). The first request
   starts `systemd-socket-proxyd`, which starts alice's Caddy; both stop after
   `caddy_user_idle_time` without traffic.
@@ -182,10 +181,10 @@ stalwart_domains:
   - { name: example.org, dns: spaceship }
 caddy_user_instances:
   - name: alice
+    hosts: [example.org, www.example.org]   # root forwards these to alice
     sites:
-      - name: www                                # ~alice/.config/caddy/conf.d/www.conf
-        hosts: [example.org, www.example.org]    # a website on a mail domain
-        directive: |
+      - name: www                           # ~alice/.config/caddy/conf.d/www.conf
+        directive: |                        # a website on a mail domain
           respond "Hello" 200
 ```
 
@@ -195,8 +194,9 @@ Each instance is bare minimum: a Caddyfile with the global options that imports
 `~/.config/caddy/conf.d/*.conf`. The role writes one file there per entry of
 `sites` (`state: absent` removes it again); every other file in `conf.d` belongs
 to the account and is never touched, so the account can add its own sites and
-configuration. The hosts of those hand-written sites are listed in
-`caddy_domains` with `user: alice`, so the fronting Caddy forwards them.
+configuration. Which names reach the account is decided at the root, in `hosts`
+of the instance; the account then answers each host as it likes. A site's own
+`hosts` default to all of them.
 
 An entry's `state` defaults to `present`.
 

@@ -46,9 +46,9 @@ dns_key_map:
 # automatically; no caddy_domains entry is needed.
 caddy_user_instances:
   - name: alice
+    hosts: [alice.example.org]   # forwarded to alice's Caddy by the front Caddy
     sites:
       - name: www                # conf.d/www.conf in alice's ~/.config/caddy
-        hosts: [alice.example.org]
         directive: |
           respond "Hello from alice" 200
 
