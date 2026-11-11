@@ -9,8 +9,8 @@ argument_specs:
         elements: raw
         description:
           - Each entry is an account name (a string) or a dict. The accounts must exist already.
-          - "Dict keys: name (required); state (present or absent); sites (list of {hosts: [...], directive: '...', dns: provider}); caddyfile (path of a file that replaces the generated one); purge (bool, with absent); release_linger (bool, with absent)."
-          - Without sites the instance serves a hello page on <name>.invalid.
+          - "Dict keys: name (required); state (present or absent); sites; purge (bool, with absent); release_linger (bool, with absent)."
+          - "A site is {name, state, hosts: [...], directive: '...', dns: provider}; the role writes it to ~/.config/caddy/conf.d/<name>.conf (state absent removes the file). Other files in conf.d are never touched."
       caddy_user_instances_state: {type: str, default: present, choices: [present, absent], description: "Default state of entries without their own."}
       caddy_user_socket_dir: {type: path, default: /run/caddy-user-sockets, description: "Directory of the sockets."}
       caddy_binary_path: {type: path, default: /usr/local/bin/caddy, description: "The Caddy binary."}

@@ -1,0 +1,6 @@
+# Managed by Ansible (caddy_user_instances), site {{ item.name }}.
+{{ item.hosts | map('regex_replace', '^', 'http://') | join(', ') }} {
+{% if item.directive | default('') | length > 0 %}
+{{ item.directive | indent(4, true) }}
+{% endif %}
+}

@@ -17,7 +17,11 @@
             dns: own
       - { name: gone, state: absent, sites: [{ hosts: [gone.test.example.org] }] }
       - plainname
-      - { name: nosites, caddyfile: files/x }
+      - { name: nosites }
+      - name: partial
+        sites:
+          - { name: on, hosts: [on.test.example.org] }
+          - { name: off, state: absent, hosts: [off.test.example.org] }
     # Expected result for caddy_domains: []
     expected:
       muelli.test.example.org: { state: present, user: muelli, dns: spaceship }
@@ -25,6 +29,8 @@
       x.a.test.example.org: { state: present, user: muelli, dns: other }
       other.net: { state: present, user: muelli, dns: own }
       gone.test.example.org: { state: absent, user: gone, dns: spaceship }
+      on.test.example.org: { state: present, user: partial, dns: spaceship }
+      off.test.example.org: { state: absent, user: partial, dns: spaceship }
   tasks:
     - name: Derive with nothing listed in caddy_domains
       ansible.builtin.include_tasks: ../roles/caddy_front/tasks/user_instance_sites.yml

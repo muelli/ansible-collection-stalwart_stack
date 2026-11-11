@@ -38,8 +38,8 @@ on x86_64 or aarch64 with systemd.
   listed once; a `caddy_domains` entry of the same name takes precedence (for
   `dns:` or other options). The DNS provider defaults to the site's `dns:`, else
   the one of the longest Stalwart domain the host lies below, else none
-  (HTTP-01). An instance with `caddyfile:` and no `sites:` needs its hosts in
-  `caddy_domains`. systemd creates that socket (mode
+  (HTTP-01). Sites you write by hand in the account's `conf.d` need their hosts in
+  `caddy_domains` (`user: alice`). systemd creates that socket (mode
   `0660`, group `alice`; the front Caddy joins the group). The first request
   starts `systemd-socket-proxyd`, which starts alice's Caddy; both stop after
   `caddy_user_idle_time` without traffic.
@@ -183,10 +183,20 @@ stalwart_domains:
 caddy_user_instances:
   - name: alice
     sites:
-      - hosts: [example.org, www.example.org]   # a website on a mail domain
+      - name: www                                # ~alice/.config/caddy/conf.d/www.conf
+        hosts: [example.org, www.example.org]    # a website on a mail domain
         directive: |
           respond "Hello" 200
 ```
+
+### The Caddy of a user
+
+Each instance is bare minimum: a Caddyfile with the global options that imports
+`~/.config/caddy/conf.d/*.conf`. The role writes one file there per entry of
+`sites` (`state: absent` removes it again); every other file in `conf.d` belongs
+to the account and is never touched, so the account can add its own sites and
+configuration. The hosts of those hand-written sites are listed in
+`caddy_domains` with `user: alice`, so the fronting Caddy forwards them.
 
 An entry's `state` defaults to `present`.
 

@@ -43,6 +43,13 @@
 - Every role has a `meta/argument_specs.yml`: Ansible checks the types and the keys
   of list entries (`stalwart_domains`, `caddy_domains`, `stalwart_relay_hosts`, ...)
   when the role starts and a misspelled or renamed key fails with its name.
+- Breaking: a user instance of `caddy_user_instances` is a bare Caddyfile that
+  imports `~/.config/caddy/conf.d/*.conf`. Each entry of `sites` is written to
+  `conf.d/<name>.conf` (`name` defaults to the first host; `state: absent` removes
+  the file); other files in `conf.d` belong to the account and are not touched.
+  The `caddyfile:` key and the default hello page are gone. A site whose state is
+  `absent` also removes its front site. The role's tasks are split into
+  `account.yml`, `config.yml`, `units.yml` and `smoke.yml`.
 - `caddy_directive` of `caddy_domains` entries is now `directive`, as in the
   sites of `caddy_user_instances`.
 - `stalwart_install_vandelay: true` installs Vandelay 1.0.15, Stalwart's account

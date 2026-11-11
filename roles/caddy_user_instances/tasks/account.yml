@@ -1,0 +1,31 @@
+---
+- name: Look up the account
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ _caddy_user }}"
+    fail_key: false
+
+- name: Check that the account exists
+  ansible.builtin.assert:
+    that: ansible_facts.getent_passwd[_caddy_user] is not none
+    fail_msg: >-
+      The account {{ _caddy_user }} (caddy_user_instances) does not exist on {{ inventory_hostname }}.
+      Create it first (DebOps' users role can) or remove the instance.
+
+- name: Remember the account details
+  ansible.builtin.set_fact:
+    _caddy_uid: "{{ ansible_facts.getent_passwd[_caddy_user][1] }}"
+    _caddy_home: "{{ ansible_facts.getent_passwd[_caddy_user][4] }}"
+    _caddy_conf_dir: "{{ ansible_facts.getent_passwd[_caddy_user][4] }}/.config/caddy/conf.d"
+
+- name: Let the fronting Caddy join the primary group of the account
+  ansible.builtin.user:
+    name: "{{ caddy_front_user }}"
+    groups: "{{ _caddy_user }}"
+    append: true
+  notify: Restart the fronting Caddy for new group memberships
+
+- name: Keep the user manager running without a login session
+  ansible.builtin.command:
+    argv: [loginctl, enable-linger, "{{ _caddy_user }}"]
+    creates: "/var/lib/systemd/linger/{{ _caddy_user }}"

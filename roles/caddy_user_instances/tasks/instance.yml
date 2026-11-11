@@ -1,152 +1,39 @@
 ---
+# One account. The steps are in separate files:
+#   account.yml  look up the account, group membership, lingering
+#   config.yml   the bare Caddyfile and conf.d/<site>.conf
+#   units.yml    systemd user units, start, reload
+#   smoke.yml    request a page through the front socket (caddy_user_smoke_test)
 - name: Resolve the instance settings
   ansible.builtin.set_fact:
     _caddy_user: "{{ caddy_user_item.name | default(caddy_user_item) }}"
-    _caddy_user_sites: "{{ caddy_user_item.sites | default([{'hosts': [(caddy_user_item.name | default(caddy_user_item)) ~ '.invalid'], 'directive': 'respond \"Caddy of ' ~ (caddy_user_item.name | default(caddy_user_item)) ~ ' is alive\" 200'}]) }}"
-    _caddy_user_file: "{{ caddy_user_item.caddyfile | default('') }}"
+    # Every site gets a name (the file conf.d/<name>.conf) and a state.
+    _caddy_user_sites: >-
+      {%- set r = [] -%}
+      {%- for s in caddy_user_item.sites | default([]) -%}
+      {%- set n = s.name | default((s.hosts | default(['site']) | first) | regex_replace('[^A-Za-z0-9._-]', '_')) -%}
+      {%- set _ = r.append(s | combine({'name': n, 'state': s.state | default('present')})) -%}
+      {%- endfor -%}
+      {{ r }}
 
-- name: Look up the account
-  ansible.builtin.getent:
-    database: passwd
-    key: "{{ _caddy_user }}"
-    fail_key: false
-
-- name: Check that the account exists
+- name: Check the sites of the instance
   ansible.builtin.assert:
-    that: ansible_facts.getent_passwd[_caddy_user] is not none
+    that:
+      - _caddy_user_sites | map(attribute='name') | list | length == _caddy_user_sites | map(attribute='name') | list | unique | length
+      - _caddy_user_sites | selectattr('state', 'equalto', 'present') | rejectattr('hosts', 'defined') | list | length == 0
     fail_msg: >-
-      The account {{ _caddy_user }} (caddy_user_instances) does not exist on {{ inventory_hostname }}.
-      Create it first (DebOps' users role can) or remove the instance.
+      The sites of {{ _caddy_user }} need distinct names (the file conf.d/<name>.conf) and
+      every present site needs hosts.
 
-- name: Remember the account details
-  ansible.builtin.set_fact:
-    _caddy_uid: "{{ ansible_facts.getent_passwd[_caddy_user][1] }}"
-    _caddy_home: "{{ ansible_facts.getent_passwd[_caddy_user][4] }}"
+- name: Look up and prepare the account
+  ansible.builtin.include_tasks: account.yml
 
-- name: Let the fronting Caddy join the primary group of the account
-  ansible.builtin.user:
-    name: "{{ caddy_front_user }}"
-    groups: "{{ _caddy_user }}"
-    append: true
-  notify: Restart the fronting Caddy for new group memberships
+- name: Write the configuration
+  ansible.builtin.include_tasks: config.yml
 
-- name: Keep the user manager running without a login session
-  ansible.builtin.command:
-    argv: [loginctl, enable-linger, "{{ _caddy_user }}"]
-    creates: "/var/lib/systemd/linger/{{ _caddy_user }}"
+- name: Install and start the units
+  ansible.builtin.include_tasks: units.yml
 
-- name: Create the configuration directories of the account
-  ansible.builtin.file:
-    path: "{{ _caddy_home }}/{{ item }}"
-    state: directory
-    owner: "{{ _caddy_user }}"
-    group: "{{ _caddy_user }}"
-    mode: "0750"
-  loop:
-    - .config
-    - .config/caddy
-    - .config/systemd
-    - .config/systemd/user
-
-- name: Write the generated Caddyfile
-  ansible.builtin.template:
-    src: Caddyfile-user.j2
-    dest: "{{ _caddy_home }}/.config/caddy/Caddyfile"
-    owner: "{{ _caddy_user }}"
-    group: "{{ _caddy_user }}"
-    mode: "0644"
-  when: _caddy_user_file | length == 0
-  register: caddy_user_caddyfile_generated
-
-- name: Copy the supplied Caddyfile
-  ansible.builtin.copy:
-    src: "{{ _caddy_user_file }}"
-    dest: "{{ _caddy_home }}/.config/caddy/Caddyfile"
-    owner: "{{ _caddy_user }}"
-    group: "{{ _caddy_user }}"
-    mode: "0644"
-  when: _caddy_user_file | length > 0
-  register: caddy_user_caddyfile_copied
-
-- name: Write the user units
-  ansible.builtin.template:
-    src: "{{ item }}.j2"
-    dest: "{{ _caddy_home }}/.config/systemd/user/{{ item }}"
-    owner: "{{ _caddy_user }}"
-    group: "{{ _caddy_user }}"
-    mode: "0644"
-  loop:
-    - caddy-user.socket
-    - caddy-user-proxy.service
-    - caddy-user.service
-  register: caddy_user_units
-
-- name: Wait for the user manager
-  ansible.builtin.wait_for:
-    path: "/run/user/{{ _caddy_uid }}/bus"
-    timeout: 30
-
-- name: Enable and start the front socket
-  ansible.builtin.systemd_service:
-    name: caddy-user.socket
-    scope: user
-    state: "{{ 'restarted' if caddy_user_units.changed else 'started' }}"
-    enabled: true
-    daemon_reload: true
-  become: true
-  become_user: "{{ _caddy_user }}"
-  environment:
-    XDG_RUNTIME_DIR: "/run/user/{{ _caddy_uid }}"
-
-- name: Reload a running instance after a Caddyfile change
-  ansible.builtin.command:
-    argv: [systemctl, --user, try-reload-or-restart, caddy-user.service]
-  become: true
-  become_user: "{{ _caddy_user }}"
-  environment:
-    XDG_RUNTIME_DIR: "/run/user/{{ _caddy_uid }}"
-  changed_when: true
-  when: caddy_user_caddyfile_generated.changed | default(false) or caddy_user_caddyfile_copied.changed | default(false)
-
-- name: Request a page through the front socket
+- name: Check that the instance answers
+  ansible.builtin.include_tasks: smoke.yml
   when: caddy_user_smoke_test | bool
-  block:
-    - name: Request a page through the front socket
-      ansible.builtin.command:
-        argv:
-          - curl
-          - --silent
-          - --show-error
-          - --max-time
-          - "20"
-          - --unix-socket
-          - "{{ caddy_user_socket_dir }}/{{ _caddy_user }}.sock"
-          - --header
-          - "Host: {{ _caddy_user_sites[0].hosts[0] }}"
-          - http://localhost/
-      register: caddy_user_smoke
-      changed_when: false
-      failed_when: caddy_user_smoke.rc != 0 or caddy_user_smoke.stdout | length == 0
-  rescue:
-    - name: Ask the instance why it does not answer
-      ansible.builtin.shell:
-        cmd: |
-          caddy validate --config {{ _caddy_home }}/.config/caddy/Caddyfile 2>&1 | tail -n 15
-          echo '--- journal of caddy-user.service'
-          journalctl --user -u caddy-user.service -n 15 --no-pager 2>&1
-        executable: /bin/bash
-      become: true
-      become_user: "{{ _caddy_user }}"
-      environment:
-        XDG_RUNTIME_DIR: "/run/user/{{ _caddy_uid }}"
-        PATH: "{{ caddy_binary_path | dirname }}:/usr/bin:/bin"
-      register: caddy_user_why
-      changed_when: false
-      failed_when: false
-
-    - name: Fail with the reason
-      ansible.builtin.fail:
-        msg: |-
-          The Caddy of {{ _caddy_user }} did not answer on {{ caddy_user_socket_dir }}/{{ _caddy_user }}.sock for Host {{ _caddy_user_sites[0].hosts[0] }}.
-          curl: {{ caddy_user_smoke.stderr | default('') }}
-          {{ caddy_user_why.stdout | default('') }}

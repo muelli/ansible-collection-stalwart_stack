@@ -5,8 +5,8 @@
     # forwards to that user's socket, so it needs listing only there. A
     # caddy_domains entry of the same name wins and is used as written. The DNS
     # provider is the site's own `dns:`, else that of the longest Stalwart
-    # domain the host lies below, else none (HTTP-01 / TLS-ALPN-01). Instances
-    # with a `caddyfile:` and no `sites:` have no known hosts; list them in
+    # domain the host lies below, else none (HTTP-01 / TLS-ALPN-01). Sites
+    # written by hand in the account's conf.d have no known hosts; list them in
     # caddy_domains.
     caddy_all_domains: >-
       {%- set out = caddy_domains | list -%}
@@ -23,7 +23,8 @@
       {%- if p.name | length > best.len -%}{%- set best.len = p.name | length -%}{%- set best.dns = p.dns -%}{%- endif -%}
       {%- endfor -%}
       {%- endif -%}
-      {%- set entry = {'name': h, 'state': ustate, 'user': uname} -%}
+      {%- set sstate = 'absent' if site.state | default('present') == 'absent' else ustate -%}
+      {%- set entry = {'name': h, 'state': sstate, 'user': uname} -%}
       {%- if best.dns is not none -%}{%- set _ = entry.update({'dns': best.dns}) -%}{%- endif -%}
       {%- set _ = out.append(entry) -%}
       {%- set seen.names = seen.names + [h] -%}

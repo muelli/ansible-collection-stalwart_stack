@@ -1,0 +1,40 @@
+---
+- name: Write the user units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "{{ _caddy_home }}/.config/systemd/user/{{ item }}"
+    owner: "{{ _caddy_user }}"
+    group: "{{ _caddy_user }}"
+    mode: "0644"
+  loop:
+    - caddy-user.socket
+    - caddy-user-proxy.service
+    - caddy-user.service
+  register: caddy_user_units
+
+- name: Wait for the user manager
+  ansible.builtin.wait_for:
+    path: "/run/user/{{ _caddy_uid }}/bus"
+    timeout: 30
+
+- name: Enable and start the front socket
+  ansible.builtin.systemd_service:
+    name: caddy-user.socket
+    scope: user
+    state: "{{ 'restarted' if caddy_user_units.changed else 'started' }}"
+    enabled: true
+    daemon_reload: true
+  become: true
+  become_user: "{{ _caddy_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ _caddy_uid }}"
+
+- name: Reload a running instance after a configuration change
+  ansible.builtin.command:
+    argv: [systemctl, --user, try-reload-or-restart, caddy-user.service]
+  become: true
+  become_user: "{{ _caddy_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ _caddy_uid }}"
+  changed_when: true
+  when: _caddy_config_changed | bool

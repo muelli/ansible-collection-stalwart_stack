@@ -1,12 +1,21 @@
 ---
-# Users that get their own Caddy. Each entry is a name or a dict:
-#   - name: alice
-#     sites:                       # optional; default is a single hello page
-#       - hosts: [alice.example.org, www.alice.example.org]
-#         directive: |
+# Users that get their own Caddy. Each instance is bare minimum: a Caddyfile
+# with the global options that imports ~/.config/caddy/conf.d/*.conf, nothing
+# else. What is served is up to the account: add files to conf.d yourself, they
+# are never touched. Each entry is an account name or a dict:
+#   - name: alice                  # the account; it must exist already
+#     state: present               # default; absent removes the units, see below
+#     sites:                       # optional: conf.d files this role writes
+#       - name: www                # file conf.d/www.conf; default: the first host
+#         state: present           # default; absent removes conf.d/www.conf
+#         hosts: [alice.example.org, www.alice.example.org]
+#                                  # the names caddy_front forwards to this account
+#         directive: |             # the body of the site block, as in a Caddyfile
 #           root * /home/alice/www
 #           file_server
-#     caddyfile: files/alice.Caddyfile   # optional; replaces the generated file
+# A site without `directive` is a site block with no content. Sites of an
+# account that are written by hand in conf.d need their hosts in caddy_domains
+# (`user: alice`) so that the fronting Caddy forwards them.
 caddy_user_instances: []
 
 # Default for entries without their own `state`; teardown.yml sets it to absent.

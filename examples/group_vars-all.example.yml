@@ -47,7 +47,8 @@ dns_key_map:
 caddy_user_instances:
   - name: alice
     sites:
-      - hosts: [alice.example.org]
+      - name: www                # conf.d/www.conf in alice's ~/.config/caddy
+        hosts: [alice.example.org]
         directive: |
           respond "Hello from alice" 200
 
