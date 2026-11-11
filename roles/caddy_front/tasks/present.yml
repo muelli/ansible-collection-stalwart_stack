@@ -363,10 +363,19 @@
     - name: Fail with the reason per missing certificate
       ansible.builtin.fail:
         msg: |-
-          Caddy did not produce a certificate within {{ caddy_cert_wait_timeout }}s. Last error per name:
+          Caddy did not produce a certificate within {{ caddy_cert_wait_timeout }}s.
+          Waited for these certificates (name: file in {{ caddy_certs_dir }}):
+          {% for r in caddy_still_missing.results %}
+            {{ r.item }}: {{ caddy_cert_source[r.item] }}/{{ caddy_cert_source[r.item] }}.crt ({{ 'present now' if r.stat.exists else 'MISSING' }})
+          {% endfor %}
+          {% if caddy_still_missing.results | rejectattr('stat.exists') | list | length == 0 %}
+          None is missing any more: the certificate arrived just after the timeout. Run again, or raise caddy_cert_wait_timeout (DNS-01 waits for propagation per name).
+          {% else %}
+          Last error per missing name:
           {% for r in caddy_still_missing.results | rejectattr('stat.exists') %}
             {{ r.item }}: {{ caddy_cert_errors[caddy_cert_source[r.item] | replace('wildcard_.', '*.')] | default('nothing logged; check that the name is served by Caddy and read the journal') }}
           {% endfor %}
+          {% endif %}
           {% if caddy_other_problems | length > 0 %}
           Other warnings and errors from Caddy:
           {% for l in caddy_other_problems %}
