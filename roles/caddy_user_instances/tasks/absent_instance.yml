@@ -28,9 +28,6 @@
       loop: [caddy-user.socket, caddy-user-proxy.service, caddy-user.service]
       become: true
       become_user: "{{ _caddy_user }}"
-      vars:
-        # The home directory may not be writable by the account, which would make Ansible warn about ~/.ansible/tmp.
-        ansible_remote_tmp: "/tmp/.ansible-{{ _caddy_user }}"
       environment:
         XDG_RUNTIME_DIR: "/run/user/{{ _caddy_uid }}"
       when: caddy_user_bus.stat.exists
