@@ -32,3 +32,24 @@
       {%- endfor -%}
       {%- endfor -%}
       {{ out }}
+
+- name: Add the host name of Bulwark as a site
+  when: bulwark_hostname | default('') | length > 0
+  ansible.builtin.set_fact:
+    # Forwards to the Bulwark container (see caddy_bulwark_directive). A
+    # caddy_domains entry or user instance host of the same name wins and is used
+    # as written. The DNS provider is that of the longest Stalwart domain the
+    # name lies below, like for the user instance hosts. The site follows
+    # bulwark_enabled, so disabling Bulwark removes it.
+    caddy_all_domains: >-
+      {%- set out = caddy_all_domains | list -%}
+      {%- if bulwark_hostname not in (caddy_all_domains | map(attribute='name') | list) -%}
+      {%- set best = namespace(len=0, dns=none) -%}
+      {%- for p in stalwart_domains if p.state | default('present') == 'present' and p.dns is defined and bulwark_hostname.endswith('.' ~ p.name) -%}
+      {%- if p.name | length > best.len -%}{%- set best.len = p.name | length -%}{%- set best.dns = p.dns -%}{%- endif -%}
+      {%- endfor -%}
+      {%- set entry = {'name': bulwark_hostname, 'state': 'present' if bulwark_enabled | default(false) | bool else 'absent', 'caddy_directive': caddy_bulwark_directive} -%}
+      {%- if best.dns is not none -%}{%- set _ = entry.update({'dns': best.dns}) -%}{%- endif -%}
+      {%- set _ = out.append(entry) -%}
+      {%- endif -%}
+      {{ out }}

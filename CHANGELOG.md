@@ -35,6 +35,10 @@
   `present`.
 - Every role in the playbook carries its name as a tag: `--tags caddy_front` runs
   one role.
+- `bulwark_hostname` names the host of Bulwark. caddy_front serves it (forwarding
+  to the container, `caddy_bulwark_directive`) and allows it to call Stalwart across
+  origins, so neither a `caddy_domains` entry nor `stalwart_cors_origins` is needed
+  for Bulwark any more. The site follows `bulwark_enabled`.
 
 ## 0.1.1
 

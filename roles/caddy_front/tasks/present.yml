@@ -7,6 +7,14 @@
 - name: Add the hosts of the user Caddy instances as sites
   ansible.builtin.include_tasks: user_instance_sites.yml
 
+- name: Work out the origins that may call Stalwart across origins
+  ansible.builtin.set_fact:
+    # The listed ones plus the Bulwark host, which talks to Stalwart from the browser.
+    caddy_cors_origins: >-
+      {{ (stalwart_cors_origins
+          + (['https://' ~ bulwark_hostname] if bulwark_hostname | default('') | length > 0 and bulwark_enabled | default(false) | bool else []))
+         | unique | list }}
+
 - name: Reject domains with an unknown state
   ansible.builtin.fail:
     msg: "Domain '{{ item.name }}' has the unknown state '{{ item.state | default('') }}' (use present or absent)."

@@ -14,8 +14,8 @@ dns {{ dns_provider }} {
 
 {% macro site_body(item) %}
 {% if item.kind == 'stalwart' %}
-{%   if stalwart_cors_origins | length > 0 %}
-{%     set cors_re = '^(?:' ~ (stalwart_cors_origins | map('regex_escape') | join('|')) ~ ')$' %}
+{%   if caddy_cors_origins | length > 0 %}
+{%     set cors_re = '^(?:' ~ (caddy_cors_origins | map('regex_escape') | join('|')) ~ ')$' %}
     @cors_preflight {
         method OPTIONS
         header_regexp cors Origin {{ cors_re }}

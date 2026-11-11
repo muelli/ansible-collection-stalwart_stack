@@ -103,17 +103,19 @@ listens on `127.0.0.1:3000`. The browser talks to Stalwart directly, so Bulwark
 is pointed at `https://<stalwart_hostname>` (`bulwark_jmap_url`), never at the
 loopback listener: the browser would try to reach `127.0.0.1` on its own
 machine. Enable it with `bulwark_enabled: true` and `bulwark_admin_password`
-(vault), then add a Caddy site:
+(vault), and name its host:
 
 ```yaml
-caddy_domains:
-  - name: webmail.example.org
-    dns: hetzner
-    caddy_directive: |
-      reverse_proxy 127.0.0.1:3000 {
-          flush_interval -1
-      }
+bulwark_enabled: true
+bulwark_hostname: webmail.example.org
 ```
+
+`caddy_front` then serves that name (forwarding to `bulwark_bind:bulwark_port`
+with `flush_interval -1`, and the DNS provider of the Stalwart domain it lies
+below) and lets it call Stalwart across origins: the Caddy site answers the CORS
+preflight for `https://<bulwark_hostname>`. More origins go into
+`stalwart_cors_origins`. A `caddy_domains` entry of the same name wins and is
+used as written, for example to set its own `dns:` or directive.
 
 ### Automatic DNS for a subdomain of a zone
 
@@ -252,7 +254,8 @@ CA), Caddy v2.11.9 (upgrade from v2.11.7, xcaddy build via podman), CORS preflig
 and origin allowlist through `stalwart_cors_origins`, a host name that is not a
 mail domain (certificate from the parent's wildcard, valid on the IMAPS port), a
 mail domain that serves a website with the subdomains still going to Stalwart, a
-domain without `state`, the zone check failing when a subdomain is missing, and
+domain without `state`, the zone check failing when a subdomain is missing,
+`bulwark_hostname` (site and CORS preflight derived from it), and
 `--tags caddy_front`, Caddy with its internal CA: fresh install, repeat run
 without changes,
 fallback to recovery, forced apply through the management listener, web path

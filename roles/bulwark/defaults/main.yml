@@ -3,6 +3,11 @@
 # unit, so systemd runs it like any other service. Caddy (caddy_front) fronts
 # it: add a site with `caddy_directive: reverse_proxy 127.0.0.1:3000`.
 
+# Public host name of Bulwark, for example webmail.example.org. caddy_front then
+# serves it (forwarding to bulwark_bind:bulwark_port) and allows it to call
+# Stalwart across origins.
+# bulwark_hostname: webmail.example.org
+
 # Needs Stalwart 1.0 with Bulwark >= 1.18.0.
 bulwark_version: "1.21.0"
 bulwark_image: ghcr.io/bulwarkmail/webmail
