@@ -87,6 +87,17 @@
           'subjectAlternativeNames': {domain.name: true}}}}] -%}
 {%- endfor -%}
 
+{#- The host name of the server is not a mail domain but needs a certificate for the mail ports. -#}
+{%- set domain_names = stalwart_domains | selectattr('state', 'equalto', 'present') | map(attribute='name') | list -%}
+{%- if stalwart_hostname is defined and stalwart_hostname | length > 0 and stalwart_hostname not in domain_names -%}
+{%-   set ops.list = ops.list + [{
+        '@type': 'upsert', 'object': 'Certificate', 'matchOn': ['subjectAlternativeNames'],
+        'value': {('certificate-' ~ (stalwart_hostname | replace('.', '-'))): {
+          'certificate': {'@type': 'File', 'filePath': stalwart_certs_dir ~ '/' ~ stalwart_hostname ~ '.crt'},
+          'privateKey': {'@type': 'File', 'filePath': stalwart_certs_dir ~ '/' ~ stalwart_hostname ~ '.key'},
+          'subjectAlternativeNames': {stalwart_hostname: true}}}}] -%}
+{%- endif -%}
+
 {#- Stage 4: domains -#}
 {%- for domain in stalwart_domains if domain.state == 'absent' -%}
 {%-   set ops.list = ops.list + [{'@type': 'destroy', 'object': 'Domain', 'value': {'name': domain.name}}] -%}

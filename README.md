@@ -126,42 +126,70 @@ stalwart_domains:
   - { name: test.example.org, state: present, dns: spaceship, zone_origin: example.org }
 ```
 
-### Stalwart domains and Caddy sites are separate
+### The Stalwart host name and the mail domains
 
-Everything on the hostname of a `stalwart_domains` entry goes to Stalwart, through
-its `http-proxy` listener with PROXY protocol v2 (the roles always create that
-listener and the loopback `mgmt` listener, even when `stalwart_server_listeners`
-is overridden). Stalwart serves many paths there (`/jmap`, `/dav`, `/auth`,
-`/login`, `/.well-known/*`, `/autodiscover`, `/admin`, ...), its documentation
-gives no list a front end could split on, and the list may grow, so a stalwart
-entry has no `caddy_directive` and nothing else can be served on that name. Put
-other sites into `caddy_domains`; the play fails when a name appears in both.
+Two kinds of names belong to Stalwart, and the roles treat them differently.
 
-`/` on a Stalwart hostname is not served by Stalwart itself but redirected
-(`Http.redirectRoot`, default `/account`). The roles point it at
-`https://www.<first stalwart domain>/` (`stalwart_redirect_root`, which derives
-from `stalwart_root_site`) and let Caddy answer there with its plain default
-response, a site with no directives and no certificate of its own when a wildcard
-covers it. Set `stalwart_redirect_root` to your own URL, or `stalwart_root_site: ""`
-and `stalwart_redirect_root: ""` to leave both alone. After applying the plan the
-role runs Stalwart's `ReloadSettings` action, since such settings are otherwise
-read only at startup.
+* **`stalwart_hostname`** is where Stalwart listens, and what the MX and SRV
+  records of every domain point at (`mail.example.org`). Everything on it goes
+  to Stalwart, through its `http-proxy` listener with PROXY protocol v2 (the
+  roles always create that listener and the loopback `mgmt` listener, even when
+  `stalwart_server_listeners` is overridden). Stalwart serves many paths there
+  (`/jmap`, `/dav`, `/auth`, `/login`, `/.well-known/*`, `/admin`, ...) and its
+  documentation gives no list a front end could split on, so nothing else can be
+  served on that name. It needs no `stalwart_domains` entry: it gets its site
+  and a certificate that is copied to Stalwart for the mail ports.
+* **The mail domains** in `stalwart_domains` are the part after the `@`. Mail
+  needs only a few subdomains of them over HTTPS (`mta-sts`, `autoconfig`,
+  `autodiscover`, `ua-auto-config`, `stalwart_subdomains`), which go to Stalwart,
+  as in the DNS records Stalwart wants for the domain. The domain's own name is
+  free for a site of yours: list it in `caddy_domains` or as a host of a
+  `caddy_user_instances` site. Without one, Caddy answers 404 there.
+  `serve_http: true` on an entry forwards everything on its name to Stalwart
+  instead (the play then fails when a Caddy site uses the name).
 
-Each Stalwart domain gets one wildcard certificate (DNS-01, so it needs `dns:`;
+After the plan is applied the roles compare the CNAME records Stalwart wants for
+each domain with the subdomain sites Caddy serves, and fail when one is missing
+(`stalwart_check_zone: false` turns this off; a domain that sets `subdomains`
+itself is skipped). What clients still look for on the bare mail domain is
+Thunderbird's fallback `/.well-known/autoconfig/mail/config-v1.1.xml`, which
+comes second after `autoconfig.<domain>`; JMAP, CalDAV and CardDAV discovery
+follow the SRV records to the host name.
+
+`/` on the Stalwart host name is not served by Stalwart itself but redirected
+(`Http.redirectRoot`, default `/account`); `stalwart_redirect_root` sets another
+URL. After applying the plan the role runs Stalwart's `ReloadSettings` action,
+since such settings are otherwise read only at startup.
+
+Each mail domain gets one wildcard certificate (DNS-01, so it needs `dns:`;
 Caddy 2.10 or newer, which prefers a wildcard certificate over per-name ones
-when the config has one). The sites one label below the domain (`mta-sts`,
-`autoconfig`, `autodiscover` and other `stalwart_domains` entries such as the
-mail host) keep their own site files but get no certificate of their own, and
-the copy for Stalwart's mail ports is taken from the wildcard certificate. The
-domain itself keeps its own certificate, `caddy_domains` entries keep theirs,
-and unknown subdomains get a 404 from the wildcard site. `wildcard: false` on an
-entry gives every name its own certificate.
+when the config has one). The names one label below the domain (the subdomains
+above and the host name when it lies there) keep their own site files but get no
+certificate of their own, and the copy for Stalwart's mail ports is taken from the
+wildcard certificate. The domain itself keeps its own certificate, `caddy_domains`
+entries keep theirs, and unknown subdomains get a 404 from the wildcard site.
+`wildcard: false` on an entry gives every name its own certificate.
 
 ```yaml
+stalwart_hostname: mail.example.org
 stalwart_domains:
-  - { name: test.example.org, state: present, dns: spaceship, zone_origin: example.org }
-  - { name: mail.test.example.org, state: present }
+  - { name: example.org, dns: spaceship }
+caddy_user_instances:
+  - name: alice
+    sites:
+      - hosts: [example.org, www.example.org]   # a website on a mail domain
+        directive: |
+          respond "Hello" 200
 ```
+
+An entry's `state` defaults to `present`.
+
+### Running one role
+
+Every role is tagged with its name, so `ansible-playbook playbook.yml --tags
+caddy_front` (or `debops run stalwart -l host --tags caddy_front`) runs that role
+alone. `--start-at-task` does not work: the later tasks need facts that the
+skipped ones compute.
 
 ### Web applications
 
@@ -221,8 +249,12 @@ Ubuntu 26.04 VM, ansible-core 2.21.5, Stalwart 1.0.0 (fresh install), 1.0.2
 stalwart-cli 1.0.14, Bulwark 1.21.0 (upgrade from 1.20.0; 1.20.0 came from 1.18.0,
 and its readiness check cannot reach Stalwart on the VM, which has an internal
 CA), Caddy v2.11.9 (upgrade from v2.11.7, xcaddy build via podman), CORS preflight
-and origin allowlist through `stalwart_cors_origins`, Caddy with its internal CA:
-fresh install, repeat run without changes,
+and origin allowlist through `stalwart_cors_origins`, a host name that is not a
+mail domain (certificate from the parent's wildcard, valid on the IMAPS port), a
+mail domain that serves a website with the subdomains still going to Stalwart, a
+domain without `state`, the zone check failing when a subdomain is missing, and
+`--tags caddy_front`, Caddy with its internal CA: fresh install, repeat run
+without changes,
 fallback to recovery, forced apply through the management listener, web path
 Caddy -> Stalwart (PROXY v2) and Caddy -> user socket -> user Caddy, socket
 unreachable for other users, certificate sync and reload.

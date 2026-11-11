@@ -55,6 +55,8 @@ dns {{ dns_provider }} {
         }
     }
 {%   endif %}
+{% elif item.kind == 'placeholder' %}
+    respond "Not found" 404
 {% else %}
 {% if item.caddy_directive is defined and item.caddy_directive | length > 0 %}
 {{ item.caddy_directive | indent(4, true) }}

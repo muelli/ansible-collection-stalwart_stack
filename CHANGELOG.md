@@ -16,6 +16,25 @@
   default roles created by an earlier version: start the server once with
   `STALWART_UPDATE_ROLE_PERMISSIONS=true` to add them. Nothing in these roles
   needs them.
+- Breaking: the name of a mail domain is no longer forwarded to Stalwart. Only
+  `stalwart_hostname` and the subdomains (`mta-sts`, `autoconfig`, `autodiscover`
+  and the new `ua-auto-config`) are. The domain's own name is free for a
+  `caddy_domains` or `caddy_user_instances` site, and answers 404 when there is
+  none. `stalwart_domains[].serve_http: true` (or `stalwart_serve_http`) brings
+  the old behaviour back for a domain.
+- Breaking: `stalwart_hostname` gets its own Caddy site and certificate and needs
+  no `stalwart_domains` entry, so it can be `mail.example.org` without being a
+  mail domain. Stalwart gets a Certificate object for it in the plan.
+- Breaking: `stalwart_root_site` is gone, and so is the `www.` site it created.
+  `stalwart_redirect_root` is empty by default; set it to redirect `/` of the host
+  name.
+- After the apply, stalwart_config compares the CNAME records Stalwart wants for
+  each domain with the subdomain sites Caddy serves and fails on a difference
+  (`stalwart_check_zone`).
+- The `state` of `stalwart_domains` and `caddy_domains` entries defaults to
+  `present`.
+- Every role in the playbook carries its name as a tag: `--tags caddy_front` runs
+  one role.
 
 ## 0.1.1
 

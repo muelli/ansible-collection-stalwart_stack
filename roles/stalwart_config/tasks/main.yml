@@ -1,4 +1,11 @@
 ---
+- name: Default the state of every domain to present
+  ansible.builtin.set_fact:
+    stalwart_domains: >-
+      {%- set out = [] -%}
+      {%- for d in stalwart_domains -%}{%- set _ = out.append({'state': 'present'} | combine(d)) -%}{%- endfor -%}
+      {{ out }}
+
 - name: Check required variables
   ansible.builtin.assert:
     that:
@@ -10,7 +17,10 @@
 - name: Check that every certificate the plan references exists
   ansible.builtin.stat:
     path: "{{ stalwart_certs_dir }}/{{ item.name }}.{{ ext }}"
-  loop: "{{ stalwart_domains | selectattr('state', 'equalto', 'present') | list }}"
+  loop: >-
+    {{ stalwart_domains | selectattr('state', 'equalto', 'present') | list
+       + ([{'name': stalwart_hostname}]
+          if stalwart_hostname not in (stalwart_domains | selectattr('state', 'equalto', 'present') | map(attribute='name') | list) else []) }}
   loop_control:
     label: "{{ item.name }}"
   vars:
@@ -306,3 +316,73 @@
     name: "{{ stalwart_service_name }}"
     state: started
     enabled: "{{ stalwart_service_enabled | default(true) }}"
+
+# Stalwart lists the DNS records it wants for a domain, among them one CNAME per
+# subdomain that clients fetch over HTTPS (mta-sts, autoconfig, ...). Caddy has
+# to serve each of them, so compare the two; a name Stalwart adds in a later
+# release then fails the run instead of going unnoticed. Needs caddy_front in the
+# same play, and skips domains that set their own `subdomains`.
+- name: Check that Caddy serves the subdomains Stalwart wants DNS records for
+  when:
+    - stalwart_check_zone | bool
+    - caddy_stalwart_subdomain_sites is defined
+  block:
+    - name: Wait for the management listener
+      ansible.builtin.wait_for:
+        host: "{{ stalwart_mgmt_bind.rsplit(':', 1)[0] }}"
+        port: "{{ stalwart_mgmt_bind.rsplit(':', 1)[1] | int }}"
+        timeout: 60
+
+    - name: List the domains of the server
+      ansible.builtin.command:
+        argv: ["{{ stalwart_bin_dir }}/stalwart-cli", query, Domain, --fields, name, --json, --no-color]
+      environment:
+        STALWART_URL: "{{ stalwart_mgmt_url }}"
+        STALWART_USER: "{{ stalwart_admin_user }}"
+        STALWART_PASSWORD: "{{ stalwart_admin_password }}"
+      register: stalwart_domain_query
+      changed_when: false
+
+    - name: Pick the domains to check
+      ansible.builtin.set_fact:
+        stalwart_zone_domains: >-
+          {%- set want = stalwart_domains | selectattr('state', 'equalto', 'present') | rejectattr('subdomains', 'defined') | map(attribute='name') | list -%}
+          {%- set out = [] -%}
+          {%- for l in stalwart_domain_query.stdout_lines if l is match('^[{]') -%}
+          {%- set o = l | from_json -%}
+          {%- if o.name in want -%}{%- set _ = out.append(o) -%}{%- endif -%}
+          {%- endfor -%}
+          {{ out }}
+
+    - name: Read the zone file of each domain
+      ansible.builtin.command:
+        argv: ["{{ stalwart_bin_dir }}/stalwart-cli", get, Domain, "{{ item.id }}", --fields, "name,dnsZoneFile", --json, --no-color]
+      environment:
+        STALWART_URL: "{{ stalwart_mgmt_url }}"
+        STALWART_USER: "{{ stalwart_admin_user }}"
+        STALWART_PASSWORD: "{{ stalwart_admin_password }}"
+      loop: "{{ stalwart_zone_domains }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: stalwart_zone_files
+      changed_when: false
+
+    - name: Work out the subdomains in the zone files that Caddy does not serve
+      ansible.builtin.set_fact:
+        stalwart_zone_missing: >-
+          {%- set out = [] -%}
+          {%- for r in stalwart_zone_files.results -%}
+          {%- set zone = (r.stdout | from_json).dnsZoneFile | default('') -%}
+          {%- set owners = zone | regex_findall('(?m)^(\S+?)\.?\s+IN\s+CNAME\s') -%}
+          {%- set served = caddy_stalwart_subdomain_sites | selectattr('state', 'equalto', 'present') | map(attribute='name') | list -%}
+          {%- for o in owners if o not in served -%}{%- set _ = out.append(o) -%}{%- endfor -%}
+          {%- endfor -%}
+          {{ out | unique | list }}
+
+    - name: Fail when Stalwart wants a subdomain Caddy does not serve
+      ansible.builtin.assert:
+        that: stalwart_zone_missing | length == 0
+        fail_msg: >-
+          Stalwart publishes DNS records (CNAME) for {{ stalwart_zone_missing | join(', ') }}, but caddy_front serves no
+          site there. Add the label to stalwart_subdomains (or the domain's `subdomains`), or set
+          stalwart_check_zone: false.

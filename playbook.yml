@@ -7,10 +7,13 @@
   # A failed run must still restart Caddy after a group change, or the next
   # run would see no change and never restart it.
   force_handlers: true
+  # Every role carries its name as a tag, so one role can be run alone:
+  # ansible-playbook playbook.yml --tags caddy_front
   roles:
-    - stalwart_install
-    - caddy_front
-    - caddy_user_instances
-    - stalwart_config
+    - { role: stalwart_install, tags: [stalwart_install] }
+    - { role: caddy_front, tags: [caddy_front] }
+    - { role: caddy_user_instances, tags: [caddy_user_instances] }
+    - { role: stalwart_config, tags: [stalwart_config] }
     - role: bulwark
+      tags: [bulwark]
       when: bulwark_enabled | default(false) | bool

@@ -1,4 +1,15 @@
 ---
+- name: Default the state of every domain to present
+  ansible.builtin.set_fact:
+    stalwart_domains: >-
+      {%- set out = [] -%}
+      {%- for d in stalwart_domains -%}{%- set _ = out.append({'state': 'present'} | combine(d)) -%}{%- endfor -%}
+      {{ out }}
+    caddy_domains: >-
+      {%- set out = [] -%}
+      {%- for d in caddy_domains -%}{%- set _ = out.append({'state': 'present'} | combine(d)) -%}{%- endfor -%}
+      {{ out }}
+
 - name: Remove caddy_front
   ansible.builtin.include_tasks: absent.yml
   when: caddy_front_state == 'absent'

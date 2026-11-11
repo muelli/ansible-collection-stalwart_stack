@@ -65,25 +65,33 @@ caddy_issuer_dir: "{{ 'local' if caddy_tls_mode == 'internal' else acme_host_slu
 caddy_certs_dir: "{{ caddy_storage_dir }}/certificates/{{ caddy_issuer_dir }}"
 
 # --- Sites ------------------------------------------------------------------
-# stalwart_domains: names served by Stalwart. Caddy forwards EVERYTHING on them
-# to Stalwart's PROXY v2 listener (web UI, JMAP, DAV, discovery, MTA-STS), so
-# nothing else can be served on these hostnames; they have no caddy_directive.
-# Their certificate is copied to Stalwart for the mail ports.
-#   - { name: mail.example.org, state: present, dns: hetzner, zone_origin: example.org }
+# Two kinds of names belong to Stalwart:
+# * stalwart_hostname, where Stalwart listens (MX and SRV records point at it).
+#   Caddy gives it a site that forwards EVERYTHING to Stalwart's PROXY v2
+#   listener (web UI, JMAP, DAV, discovery) and copies its certificate to
+#   Stalwart for the mail ports. It needs no stalwart_domains entry.
+# * the mail domains in stalwart_domains (the part after the `@`). Mail needs
+#   only a few subdomains of them over HTTPS, forwarded to Stalwart; the domain's
+#   own name stays free for a site of yours (caddy_domains or a user instance).
+#   With none, Caddy answers 404 there. `serve_http: true` on an entry forwards
+#   everything on its name to Stalwart instead.
+#   - { name: example.org, state: present, dns: hetzner }
 # Each domain gets one wildcard certificate (DNS-01, so it needs `dns:`; Caddy
-# 2.10+ prefers it over per-name ones) for the sites one label below it:
-# mta-sts, autoconfig, autodiscover and other stalwart_domains entries such as
-# the mail host. The domain itself keeps its own certificate. `wildcard: false`
-# gives every name its own certificate instead.
-# Subdomains of every Stalwart domain that clients look up over HTTPS: the
-# MTA-STS policy, Thunderbird autoconfig and Outlook autodiscover, forwarded to
-# Stalwart too. Override per domain with `subdomains: [...]`, or `[]` for none.
-stalwart_subdomains: [mta-sts, autoconfig, autodiscover]
+# 2.10+ prefers it over per-name ones) for the names one label below it: the
+# subdomains below and the host name when it lies there. The domain itself keeps
+# its own certificate. `wildcard: false` gives every name its own certificate.
+# Subdomains of every mail domain that clients look up over HTTPS, as in the
+# DNS records Stalwart wants for it: MTA-STS policy, Thunderbird autoconfig,
+# Outlook autodiscover and PACC. Override per domain with `subdomains: [...]`,
+# or `[]` for none.
+stalwart_subdomains: [mta-sts, autoconfig, autodiscover, ua-auto-config]
+stalwart_serve_http: false
 stalwart_domains: []
 
 # caddy_domains: all other sites. Give `user: alice` to forward to alice's own
 # Caddy over /run/caddy-user-sockets/alice.sock, or a caddy_directive. A name
-# must not also be a Stalwart domain or one of its subdomain sites.
+# must not also be the Stalwart host name, a subdomain site of a mail domain, or
+# a mail domain with `serve_http: true`.
 # Every host of caddy_user_instances[].sites[].hosts is added automatically as a
 # site that forwards to that user (state follows the instance). Listing it in
 # caddy_domains as well is fine: that entry wins and is used as written, so use
@@ -91,10 +99,6 @@ stalwart_domains: []
 # site's own `dns:`, else that of the longest Stalwart domain it lies below, else
 # none. An instance with `caddyfile:` and no `sites:` has no known hosts.
 
-# The site `/` of a Stalwart hostname redirects to (see stalwart_config,
-# stalwart_redirect_root): www. of the first present Stalwart domain. It gets no
-# directives, so Caddy answers with its plain default response. "" disables it.
-stalwart_root_site: "{{ ('www.' ~ (stalwart_domains | selectattr('state', 'equalto', 'present') | map(attribute='name') | list | first)) if (stalwart_domains | selectattr('state', 'equalto', 'present') | list | length) > 0 else '' }}"
 caddy_domains: []
 
 dns_key_map: {}

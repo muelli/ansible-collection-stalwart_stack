@@ -3,7 +3,10 @@
 # object and field names differ from 0.16 (for example Relay.host,
 # NetworkListener.implicitTls).
 
-# defaultHostname of the server (used in the SMTP greeting, MTA reports...).
+# defaultHostname of the server (used in the SMTP greeting, MTA reports...). It
+# is where Stalwart listens and what the MX and SRV records point at; it is not
+# a mail domain, so it needs no stalwart_domains entry. Its certificate is the
+# one of the wildcard of the mail domain it lies below, or its own.
 # stalwart_hostname: mail.example.org
 
 # Domain that SystemSettings.defaultDomainId points to. Defaults to the
@@ -22,17 +25,17 @@ stalwart_default_domain: "{{ (stalwart_domains | selectattr('state', 'equalto', 
 #                           # Left out, the server's value is kept; null (`catch_all: ~`)
 #                           # or "" clears it
 #   wildcard: false         # no wildcard certificate (default: one per domain with dns), see caddy_front
-# Caddy forwards everything on these hostnames to Stalwart; serve other sites
-# through caddy_domains.
+#   serve_http: true        # Caddy forwards everything on the domain's name to Stalwart
+#                           # (default false: the name is free for a site of yours)
 stalwart_domains: []
 
-# Where `/` on every Stalwart hostname redirects to (Http.redirectRoot; Stalwart
-# itself answers 404 there when it is unset, and defaults to /account). The
-# default is www. of the first present domain, which caddy_front serves with
-# Caddy's plain default answer (same variable and default in caddy_front). Set
-# it to a URL of your own, or "" to leave Stalwart's setting alone.
-stalwart_root_site: "{{ ('www.' ~ (stalwart_domains | selectattr('state', 'equalto', 'present') | map(attribute='name') | list | first)) if (stalwart_domains | selectattr('state', 'equalto', 'present') | list | length) > 0 else '' }}"
-stalwart_redirect_root: "{{ ('https://' ~ stalwart_root_site ~ '/') if stalwart_root_site | length > 0 else '' }}"
+# Where `/` on the Stalwart host name redirects to (Http.redirectRoot). "" leaves
+# Stalwart's setting alone, which is /account.
+stalwart_redirect_root: ""
+
+# After the apply, compare the CNAME records Stalwart wants for each domain with
+# the subdomain sites caddy_front serves, and fail on a difference.
+stalwart_check_zone: true
 
 # Stalwart's own switch (Http.usePermissiveCors) allows every origin. Leave it
 # off and list the webmail origin in caddy_front's stalwart_cors_origins instead.

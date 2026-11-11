@@ -87,26 +87,63 @@
       {%- endfor -%}
       {{ out }}
 
+- name: Work out the entry for the host name of the Stalwart server
+  ansible.builtin.set_fact:
+    # stalwart_hostname is where Stalwart listens and what MX and SRV records point
+    # at. It is not a mail domain, so it needs no stalwart_domains entry: it gets a
+    # site that forwards to Stalwart and a certificate synced to Stalwart. A host
+    # name that is also listed in stalwart_domains is handled as that entry.
+    caddy_stalwart_host_entry: >-
+      {%- set present = stalwart_domains | selectattr('state', 'equalto', 'present') | map(attribute='name') | list -%}
+      {%- if stalwart_hostname | default('') | length > 0 and stalwart_hostname not in present -%}
+      {%-   set best = namespace(len=0, dns=none) -%}
+      {%-   for p in stalwart_domains if p.state == 'present' and p.dns is defined and stalwart_hostname.endswith('.' ~ p.name) -%}
+      {%-     if p.name | length > best.len -%}{%- set best.len = p.name | length -%}{%- set best.dns = p.dns -%}{%- endif -%}
+      {%-   endfor -%}
+      {{ [{'name': stalwart_hostname, 'state': 'present', 'host_only': true} | combine({'dns': best.dns} if best.dns is not none else {})] }}
+      {%- else -%}
+      []
+      {%- endif -%}
+
+- name: Work out the names Caddy serves for Stalwart
+  ansible.builtin.set_fact:
+    caddy_stalwart_entries: "{{ stalwart_domains + caddy_stalwart_host_entry }}"
+
+- name: Work out which Stalwart names get a site that forwards to Stalwart
+  ansible.builtin.set_fact:
+    # kind 'stalwart': everything on the name goes to Stalwart. That is the host
+    # name and every mail domain with `serve_http: true`. Any other mail domain is
+    # free for a site of yours: when no Caddy site has its name Caddy answers 404
+    # there (kind 'placeholder', which also keeps its certificate coming).
+    caddy_stalwart_site_entries: >-
+      {%- set out = [] -%}
+      {%- set other = caddy_all_domains | rejectattr('state', 'equalto', 'absent') | map(attribute='name') | list -%}
+      {%- for d in caddy_stalwart_entries if d.state == 'present' -%}
+      {%-   if d.host_only | default(false) or d.name == stalwart_hostname | default('') or d.serve_http | default(stalwart_serve_http) | bool -%}
+      {%-     set _ = out.append(d | combine({'kind': 'stalwart'})) -%}
+      {%-   elif d.name not in other -%}
+      {%-     set _ = out.append(d | combine({'kind': 'placeholder'})) -%}
+      {%-   endif -%}
+      {%- endfor -%}
+      {{ out }}
+
 - name: Work out which names Caddy and Stalwart both want
   ansible.builtin.set_fact:
     caddy_clashing_names: >-
       {%- set caddy_names = caddy_all_domains | rejectattr('state', 'equalto', 'absent') | map(attribute='name') | list -%}
-      {%- set stalwart_names = (stalwart_domains + caddy_stalwart_subdomain_sites)
+      {%- set stalwart_names = (caddy_stalwart_site_entries | selectattr('kind', 'equalto', 'stalwart') | list + caddy_stalwart_subdomain_sites)
                                | selectattr('state', 'equalto', 'present') | map(attribute='name') | list -%}
-      {%- set clashes = caddy_names | intersect(stalwart_names) -%}
-      {%- if stalwart_root_site | length > 0 and stalwart_root_site in (caddy_names + stalwart_names) -%}
-      {%-   set clashes = clashes + [stalwart_root_site] -%}
-      {%- endif -%}
-      {{ clashes | unique | list }}
+      {{ caddy_names | intersect(stalwart_names) | unique | list }}
 
 - name: Check that no Caddy site clashes with a Stalwart name
   ansible.builtin.assert:
     that: caddy_clashing_names | length == 0
     fail_msg: >-
       These names are used both by Stalwart and by a Caddy site: {{ caddy_clashing_names | join(', ') }}.
-      Stalwart owns each stalwart_domains name, its subdomain sites and the root site
-      ({{ stalwart_root_site | default('none', true) }}), so caddy_domains and the hosts of
-      caddy_user_instances must use other names (everything on those hostnames goes to Stalwart).
+      Stalwart owns its host name ({{ stalwart_hostname | default('not set') }}), the subdomain sites of every
+      mail domain ({{ stalwart_subdomains | join(', ') }}) and each mail domain with `serve_http: true`
+      (everything on those names goes to Stalwart), so caddy_domains and the hosts of caddy_user_instances
+      must use other names. A mail domain without `serve_http: true` can carry a site of your own.
 
 - name: Work out which Caddy certificate serves each Stalwart name
   ansible.builtin.set_fact:
@@ -114,7 +151,7 @@
     # below a wildcard domain is served by that domain's wildcard certificate.
     caddy_cert_source: >-
       {%- set src = {} -%}
-      {%- set names = (stalwart_domains | selectattr('state', 'equalto', 'present') | map(attribute='name') | list)
+      {%- set names = (caddy_stalwart_entries | selectattr('state', 'equalto', 'present') | map(attribute='name') | list)
                       + (caddy_stalwart_subdomain_sites | selectattr('state', 'equalto', 'present') | map(attribute='name') | list) -%}
       {%- for n in names -%}
       {%- set ns = namespace(v=n) -%}
@@ -151,9 +188,7 @@
     owner: root
     group: root
     mode: "0644"
-  loop: "{{ ((stalwart_domains | selectattr('state', 'equalto', 'present') | map('combine', {'kind': 'stalwart'}) | list)
-            + (caddy_stalwart_subdomain_sites | selectattr('state', 'equalto', 'present') | list))
-            }}"
+  loop: "{{ caddy_stalwart_site_entries + (caddy_stalwart_subdomain_sites | selectattr('state', 'equalto', 'present') | list) }}"
   loop_control:
     label: "{{ item.name }}"
   notify: Reload Caddy
@@ -178,34 +213,10 @@
   when: item.name not in caddy_wildcard_parents
   notify: Reload Caddy
 
-- name: Work out the root site
-  ansible.builtin.set_fact:
-    caddy_root_site: >-
-      {%- if stalwart_root_site | length > 0 -%}
-      {%- set parent = stalwart_domains | selectattr('state', 'equalto', 'present') | selectattr('dns', 'defined')
-                       | selectattr('name', 'equalto', stalwart_root_site.split('.')[1:] | join('.')) | list -%}
-      {{ {'name': stalwart_root_site, 'kind': 'web'} | combine({'dns': parent[0].dns} if parent else {}) }}
-      {%- else -%}
-      {}
-      {%- endif -%}
-
-- name: Write the root site
-  ansible.builtin.template:
-    src: site.conf.j2
-    dest: "{{ caddy_conf_dir }}/_root.conf"
-    owner: root
-    group: root
-    mode: "0644"
-  vars:
-    item: "{{ caddy_root_site }}"
-  when: stalwart_root_site | length > 0
-  notify: Reload Caddy
-
-- name: Remove the root site when it is disabled
+- name: Remove the root site file that earlier versions wrote
   ansible.builtin.file:
     path: "{{ caddy_conf_dir }}/_root.conf"
     state: absent
-  when: stalwart_root_site | length == 0
   notify: Reload Caddy
 
 - name: Write the site files of other domains
@@ -247,7 +258,7 @@
     owner: root
     group: root
     mode: "0755"
-  loop: "{{ stalwart_domains | selectattr('state', 'equalto', 'present') | product(['service', 'path']) | list }}"
+  loop: "{{ caddy_stalwart_entries | selectattr('state', 'equalto', 'present') | product(['service', 'path']) | list }}"
   loop_control:
     label: "{{ item.0.name }}.{{ item.1 }}"
   notify: Reload systemd for Caddy
@@ -259,7 +270,7 @@
     owner: root
     group: root
     mode: "0644"
-  loop: "{{ stalwart_domains | selectattr('state', 'equalto', 'present') | product(['service', 'path']) | list }}"
+  loop: "{{ caddy_stalwart_entries | selectattr('state', 'equalto', 'present') | product(['service', 'path']) | list }}"
   loop_control:
     label: "{{ item.0.name }}.{{ item.1 }}"
   when: caddy_cert_source[item.0.name].startswith('wildcard_')
@@ -291,7 +302,7 @@
 - name: Check which certificates Stalwart already has
   ansible.builtin.stat:
     path: "{{ stalwart_certs_dir }}/{{ item.name }}.crt"
-  loop: "{{ stalwart_domains | selectattr('state', 'equalto', 'present') | list }}"
+  loop: "{{ caddy_stalwart_entries | selectattr('state', 'equalto', 'present') | list }}"
   loop_control:
     label: "{{ item.name }}"
   register: stalwart_local_certs
@@ -379,7 +390,7 @@
     name: "stalwart-cert-sync@{{ item.name }}.path"
     state: started
     enabled: true
-  loop: "{{ stalwart_domains | selectattr('state', 'equalto', 'present') | list }}"
+  loop: "{{ caddy_stalwart_entries | selectattr('state', 'equalto', 'present') | list }}"
   loop_control:
     label: "{{ item.name }}"
 
