@@ -58,8 +58,8 @@ dns {{ dns_provider }} {
 {% elif item.kind == 'placeholder' %}
     respond "Not found" 404
 {% else %}
-{% if item.caddy_directive is defined and item.caddy_directive | length > 0 %}
-{{ item.caddy_directive | indent(4, true) }}
+{% if item.directive is defined and item.directive | length > 0 %}
+{{ item.directive | indent(4, true) }}
 
 {% endif %}
 {% if item.user is defined %}

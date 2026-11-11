@@ -48,7 +48,7 @@
       {%- for p in stalwart_domains if p.state | default('present') == 'present' and p.dns is defined and bulwark_hostname.endswith('.' ~ p.name) -%}
       {%- if p.name | length > best.len -%}{%- set best.len = p.name | length -%}{%- set best.dns = p.dns -%}{%- endif -%}
       {%- endfor -%}
-      {%- set entry = {'name': bulwark_hostname, 'state': 'present' if bulwark_enabled | default(false) | bool else 'absent', 'caddy_directive': caddy_bulwark_directive} -%}
+      {%- set entry = {'name': bulwark_hostname, 'state': 'present' if bulwark_enabled | default(false) | bool else 'absent', 'directive': caddy_bulwark_directive} -%}
       {%- if best.dns is not none -%}{%- set _ = entry.update({'dns': best.dns}) -%}{%- endif -%}
       {%- set _ = out.append(entry) -%}
       {%- endif -%}

@@ -23,7 +23,7 @@ caddy_domains:
   - name: www.example.org
     state: present
     dns: hetzner
-    caddy_directive: |
+    directive: |
       respond "Hello" 200
   - name: alice.example.org
     state: present

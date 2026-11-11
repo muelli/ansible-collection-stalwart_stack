@@ -60,11 +60,11 @@
       ansible.builtin.include_tasks: ../roles/caddy_front/tasks/user_instance_sites.yml
       vars:
         caddy_domains:
-          - { name: muelli.test.example.org, state: present, caddy_directive: 'respond "x"' }
+          - { name: muelli.test.example.org, state: present, directive: 'respond "x"' }
 
     - name: The explicit entry wins as written
       ansible.builtin.assert:
         that:
           - (caddy_all_domains | selectattr('name', 'equalto', 'muelli.test.example.org') | list) | length == 1
-          - (caddy_all_domains | selectattr('name', 'equalto', 'muelli.test.example.org') | first).caddy_directive == 'respond "x"'
+          - (caddy_all_domains | selectattr('name', 'equalto', 'muelli.test.example.org') | first).directive == 'respond "x"'
           - (caddy_all_domains | selectattr('name', 'equalto', 'muelli.test.example.org') | first).user is not defined

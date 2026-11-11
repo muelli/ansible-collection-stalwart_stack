@@ -9,6 +9,14 @@
   ansible.builtin.getent:
     database: passwd
     key: "{{ _caddy_user }}"
+    fail_key: false
+
+- name: Check that the account exists
+  ansible.builtin.assert:
+    that: ansible_facts.getent_passwd[_caddy_user] is not none
+    fail_msg: >-
+      The account {{ _caddy_user }} (caddy_user_instances) does not exist on {{ inventory_hostname }}.
+      Create it first (DebOps' users role can) or remove the instance.
 
 - name: Remember the account details
   ansible.builtin.set_fact:
