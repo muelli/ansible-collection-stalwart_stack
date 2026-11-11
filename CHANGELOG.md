@@ -40,6 +40,9 @@
   origins, so neither a `caddy_domains` entry nor `stalwart_cors_origins` is needed
   for Bulwark any more. The site follows `bulwark_enabled`.
 
+- `stalwart_install_vandelay: true` installs Vandelay 1.0.15, Stalwart's account
+  migration tool (off by default; checksums for x86_64 and aarch64).
+
 ## 0.1.1
 
 - Stalwart 1.0.2 (checksums for x86_64 and aarch64) and Bulwark 1.20.0 are the

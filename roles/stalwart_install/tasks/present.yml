@@ -140,6 +140,45 @@
     creates: "{{ stalwart_marker_dir }}/cli-{{ stalwart_cli_version }}"
   register: stalwart_cli_unpacked
 
+- name: Install Vandelay, the migration tool
+  when: stalwart_install_vandelay | bool
+  block:
+    - name: Check that a checksum is known for this Vandelay version
+      ansible.builtin.assert:
+        that: stalwart_vandelay_checksum | length > 0
+        fail_msg: >-
+          No checksum for vandelay {{ stalwart_vandelay_version }} on {{ ansible_facts.architecture }}.
+          Set stalwart_vandelay_checksum (sha256:...) for versions not pinned in defaults/main.yml.
+
+    - name: Download the Vandelay release
+      ansible.builtin.get_url:
+        url: "https://github.com/stalwartlabs/vandelay/releases/download/v{{ stalwart_vandelay_version }}/vandelay-{{ ansible_facts.architecture }}-unknown-linux-gnu.tar.gz"
+        dest: "{{ stalwart_download_dir }}/vandelay-{{ stalwart_vandelay_version }}-{{ ansible_facts.architecture }}.tar.gz"
+        checksum: "{{ stalwart_vandelay_checksum }}"
+        mode: "0644"
+
+    - name: Unpack Vandelay
+      ansible.builtin.unarchive:
+        src: "{{ stalwart_download_dir }}/vandelay-{{ stalwart_vandelay_version }}-{{ ansible_facts.architecture }}.tar.gz"
+        dest: "{{ stalwart_bin_dir }}"
+        remote_src: true
+        include: ["vandelay-{{ ansible_facts.architecture }}-unknown-linux-gnu/vandelay"]
+        extra_opts: ["--strip-components=1"]
+        owner: root
+        group: root
+        mode: "0755"
+        creates: "{{ stalwart_marker_dir }}/vandelay-{{ stalwart_vandelay_version }}"
+
+    - name: Record the installed Vandelay version
+      ansible.builtin.file:
+        path: "{{ stalwart_marker_dir }}/vandelay-{{ stalwart_vandelay_version }}"
+        state: touch
+        owner: root
+        group: root
+        mode: "0644"
+        modification_time: preserve
+        access_time: preserve
+
 - name: Record the installed versions
   ansible.builtin.file:
     path: "{{ item }}"

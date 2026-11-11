@@ -72,6 +72,10 @@ on x86_64 or aarch64 with systemd.
 * `caddy_user_instances` expects the accounts to exist (DebOps can create them).
 * New Stalwart or CLI versions need their sha256 in `stalwart_checksums` /
   `stalwart_cli_checksums`, or set `stalwart_checksum` / `stalwart_cli_checksum`.
+* `stalwart_install_vandelay: true` also installs Vandelay, Stalwart's account
+  migration tool (`/usr/local/bin/vandelay`, version `stalwart_vandelay_version`).
+  Run it by hand to move mail, contacts and calendars from IMAP, CalDAV,
+  Maildir and others into Stalwart; no role calls it.
 * `caddy_build_method` is `download` (build service, no checksum), `xcaddy` or
   `binary` (prebuilt file plus `caddy_binary_sha256`).
 * `xcaddy` builds on the controller and caches the result in

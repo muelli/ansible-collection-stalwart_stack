@@ -35,6 +35,20 @@ stalwart_cli_checksums:
 stalwart_checksum: "{{ (stalwart_checksums[stalwart_version] | default({}))[ansible_facts.architecture] | default('') }}"
 stalwart_cli_checksum: "{{ (stalwart_cli_checksums[stalwart_cli_version] | default({}))[ansible_facts.architecture] | default('') }}"
 
+# --- Vandelay (optional) ----------------------------------------------------
+# Vandelay is Stalwart's account migration tool: it imports mail, contacts,
+# calendars and Sieve scripts from IMAP, CalDAV, Maildir, JMAP and others into a
+# local archive and exports that into a JMAP server. It is versioned on its own
+# and runs by hand (`vandelay import ...`, `vandelay export ...`); nothing in
+# these roles calls it. Off by default.
+stalwart_install_vandelay: false
+stalwart_vandelay_version: "1.0.15"
+stalwart_vandelay_checksums:
+  "1.0.15":
+    x86_64: "sha256:e019a86d1feda1b34847f2771f9720c3bf10e160aa3f0a8911c1e23a3fea0892"
+    aarch64: "sha256:bdc22bcecdbf938513ae7b43dc0a2bb860600cbb92e122e7912ba087931149c0"
+stalwart_vandelay_checksum: "{{ (stalwart_vandelay_checksums[stalwart_vandelay_version] | default({}))[ansible_facts.architecture] | default('') }}"
+
 # Optionally verify the sigstore bundle published next to the server tarball.
 # Needs the `cosign` binary on the target.
 stalwart_verify_sigstore: false
