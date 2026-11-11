@@ -40,6 +40,11 @@
   origins, so neither a `caddy_domains` entry nor `stalwart_cors_origins` is needed
   for Bulwark any more. The site follows `bulwark_enabled`.
 
+- Every role has a `meta/argument_specs.yml`: Ansible checks the types and the keys
+  of list entries (`stalwart_domains`, `caddy_domains`, `stalwart_relay_hosts`, ...)
+  when the role starts and a misspelled or renamed key fails with its name.
+- `caddy_directive` of `caddy_domains` entries is now `directive`, as in the
+  sites of `caddy_user_instances`.
 - `stalwart_install_vandelay: true` installs Vandelay 1.0.15, Stalwart's account
   migration tool (off by default; checksums for x86_64 and aarch64).
 

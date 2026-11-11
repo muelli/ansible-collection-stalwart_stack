@@ -1,0 +1,25 @@
+---
+argument_specs:
+  main:
+    short_description: Bulwark webmail as a Podman Quadlet container
+    options:
+      bulwark_hostname: {type: str, description: "Public host name, for example webmail.example.org. caddy_front serves it and allows it to call Stalwart across origins."}
+      bulwark_version: {type: str, default: "1.21.0", description: "Image tag. Needs Stalwart 1.0 with Bulwark 1.18.0 or newer."}
+      bulwark_image: {type: str, default: ghcr.io/bulwarkmail/webmail, description: "Image name."}
+      bulwark_image_digest: {type: str, default: "", description: "Optional sha256:... digest to pin the image."}
+      bulwark_jmap_url: {type: str, description: "Public HTTPS URL of the JMAP server; derived from stalwart_hostname."}
+      bulwark_bind: {type: str, default: 127.0.0.1, description: "Address the container listens on."}
+      bulwark_port: {type: int, default: 3000, description: "Port the container listens on."}
+      bulwark_admin_password: {type: str, no_log: true, description: "Initial admin dashboard password, 12 characters or more. Only read on first start."}
+      bulwark_session_secret: {type: str, no_log: true, description: "Optional; generated and kept in the state directory when unset."}
+      bulwark_settings_sync: {type: bool, default: false, description: "Bulwark's settings sync."}
+      bulwark_telemetry: {type: str, default: "off", description: "Telemetry setting."}
+      bulwark_extra_env: {type: dict, default: {}, description: "More environment variables for the container."}
+      bulwark_user: {type: str, default: bulwark, description: "Account the container runs as."}
+      bulwark_group: {type: str, default: bulwark, description: "Group of that account."}
+      bulwark_data_dir: {type: path, default: /var/lib/bulwark, description: "State directory."}
+      bulwark_env_dir: {type: path, default: /etc/bulwark, description: "Directory of the environment file."}
+      bulwark_service_name: {type: str, default: bulwark, description: "Name of the Quadlet unit."}
+      bulwark_health_timeout: {type: int, default: 120, description: "Seconds to wait for the container to answer."}
+      bulwark_state: {type: str, default: present, choices: [present, absent], description: "absent removes the unit, image, environment file and account."}
+      bulwark_purge_data: {type: bool, default: false, description: "With absent, also delete the data."}

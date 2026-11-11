@@ -1,0 +1,84 @@
+---
+argument_specs:
+  main:
+    short_description: Configure a running Stalwart (domains, listeners, relays, applications, DNS) through its management API
+    description: Needs stalwart_install on the same host. Every variable also has a comment in defaults/main.yml.
+    options:
+      stalwart_hostname: {type: str, description: "defaultHostname of the server; MX and SRV records point at it. Needs no stalwart_domains entry."}
+      stalwart_default_domain: {type: str, description: "Domain of SystemSettings.defaultDomainId; defaults to the first present domain."}
+      stalwart_domains:
+        type: list
+        elements: dict
+        default: []
+        description: One entry per mail domain.
+        options:
+          name: {type: str, required: true, description: "The domain."}
+          state: {type: str, default: present, choices: [present, absent], description: "absent destroys the domain in Stalwart."}
+          dns: {type: str, description: "DNS provider key (dns_key_map); Stalwart then publishes the records."}
+          zone_origin: {type: str, description: "DNS zone at the provider when it is a parent of name."}
+          subdomains: {type: list, elements: str, description: "Overrides stalwart_subdomains; [] for none."}
+          catch_all: {type: str, description: "Catch-all address, which must exist. Left out keeps the server's value; null or '' clears it."}
+          wildcard: {type: bool, default: true, description: "false: no wildcard certificate."}
+          serve_http: {type: bool, default: false, description: "true: Caddy forwards everything on the domain's own name to Stalwart."}
+      stalwart_redirect_root: {type: str, default: "", description: "Where / on the Stalwart host name redirects to; \"\" keeps Stalwart's /account."}
+      stalwart_check_zone: {type: bool, default: true, description: "Fail when Stalwart's CNAME records and Caddy's subdomain sites differ."}
+      stalwart_permissive_cors: {type: bool, default: false, description: "Stalwart's own allow-every-origin switch."}
+      stalwart_absent_dns_providers: {type: list, elements: str, default: [], description: "DNS providers (dns_key_map names) that are no longer wanted."}
+      stalwart_relay_hosts:
+        type: list
+        elements: dict
+        default: []
+        description: Outbound relays (smarthosts).
+        options:
+          name: {type: str, required: true, description: "Referenced by route in sender_domain_routing."}
+          address: {type: str, required: true, description: "Host name or IP of the relay."}
+          port: {type: int, default: 25, description: "Port."}
+          protocol: {type: str, default: smtp, description: "Protocol."}
+          implicit_tls: {type: bool, default: false, description: "TLS from the first byte (port 465)."}
+          allow_invalid_certs: {type: bool, default: false, description: "Accept a self-signed certificate."}
+          auth_username: {type: str, description: "Login; needs auth_secret too."}
+          auth_secret: {type: str, no_log: true, description: "Password; keep it in a vault."}
+          manages_spf: {type: bool, default: false, description: "The relay sends with its own return-path domain (SMTP2GO), so the SPF/dns check is skipped."}
+          description: {type: str, description: "Free text."}
+          state: {type: str, default: present, choices: [present, absent], description: "absent destroys the relay."}
+      sender_domain_routing:
+        type: list
+        elements: dict
+        default: []
+        description: Which sender domain goes through which relay; the first match wins.
+        options:
+          domain: {type: str, required: true, description: "Domain mail is sent from."}
+          route: {type: str, required: true, description: "name of an entry of stalwart_relay_hosts."}
+          state: {type: str, default: present, choices: [present, absent], description: "absent drops the rule."}
+      stalwart_applications:
+        type: list
+        elements: dict
+        default: []
+        description: Web applications Stalwart downloads and serves under URL prefixes.
+        options:
+          description: {type: str, required: true, description: "Identifies the application."}
+          url_prefix: {type: list, elements: str, description: "Single path segments such as [/app]."}
+          resource_url: {type: str, description: "URL of the zip bundle."}
+          enable: {type: bool, default: true, description: "Enabled."}
+          auto_update_interval: {type: int, description: "Update interval in milliseconds."}
+          state: {type: str, default: present, choices: [present, absent], description: "absent destroys it."}
+      dns_key_map: {type: dict, default: {}, description: "Credentials per DNS provider: {hetzner: {api_token: ...}}."}
+      stalwart_certs_dir: {type: path, default: /etc/stalwart/certs, description: "Where caddy_front writes the certificates."}
+      stalwart_config_dir: {type: path, default: /etc/stalwart, description: "Configuration directory."}
+      stalwart_bin_dir: {type: path, default: /usr/local/bin, description: "Binary directory."}
+      stalwart_service_name: {type: str, default: stalwart, description: "systemd unit."}
+      stalwart_admin_user: {type: str, default: admin, description: "Fallback administrator."}
+      stalwart_admin_password: {type: str, no_log: true, description: "Fallback administrator's password."}
+      stalwart_mgmt_url: {type: str, description: "URL of the management listener."}
+      stalwart_mgmt_bind: {type: str, default: "127.0.0.1:8081", description: "Loopback address of the plain management listener."}
+      stalwart_recovery_port: {type: int, default: 8080, description: "Port of the temporary recovery instance."}
+      stalwart_recovery_unit: {type: str, default: stalwart-recovery, description: "Unit of the recovery instance."}
+      stalwart_force_apply: {type: bool, default: false, description: "Apply the plan even when unchanged."}
+      stalwart_http_proxy_bind: {type: str, default: "127.0.0.1:8008", description: "Loopback listener Caddy talks to with PROXY protocol v2."}
+      stalwart_proxy_trusted_networks: {type: list, elements: str, description: "Networks trusted on the http-proxy listener."}
+      stalwart_global_proxy_trusted_networks: {type: list, elements: str, default: [], description: "SystemSettings.proxyTrustedNetworks; applies to every listener, so it stays empty."}
+      stalwart_server_listeners: {type: list, elements: dict, description: "Public listeners: {name, protocol, bind: [...], options: {...}}."}
+      stalwart_required_listeners: {type: list, elements: dict, description: "Listeners the roles depend on (http-proxy, mgmt); same shape."}
+      stalwart_additional_plan: {type: list, default: [], description: "Operations appended verbatim to the generated plan."}
+      stalwart_dns_provider_map: {type: dict, description: "Provider key to Stalwart DnsServer type."}
+      stalwart_dns_field_meta: {type: dict, description: "Credential name to Stalwart field mapping per provider."}

@@ -1,0 +1,19 @@
+---
+argument_specs:
+  main:
+    short_description: One Caddy per user account, reached by the fronting Caddy over a unix socket
+    options:
+      caddy_user_instances:
+        type: list
+        default: []
+        elements: raw
+        description:
+          - Each entry is an account name (a string) or a dict. The accounts must exist already.
+          - "Dict keys: name (required); state (present or absent); sites (list of {hosts: [...], directive: '...', dns: provider}); caddyfile (path of a file that replaces the generated one); purge (bool, with absent); release_linger (bool, with absent)."
+          - Without sites the instance serves a hello page on <name>.invalid.
+      caddy_user_instances_state: {type: str, default: present, choices: [present, absent], description: "Default state of entries without their own."}
+      caddy_user_socket_dir: {type: path, default: /run/caddy-user-sockets, description: "Directory of the sockets."}
+      caddy_binary_path: {type: path, default: /usr/local/bin/caddy, description: "The Caddy binary."}
+      caddy_front_user: {type: str, default: caddy, description: "Account of the fronting Caddy; it joins each instance's group."}
+      caddy_user_idle_time: {type: str, default: 30m, description: "A per-user Caddy stops after this long without traffic."}
+      caddy_user_smoke_test: {type: bool, default: true, description: "Request a page through the socket after deploying."}

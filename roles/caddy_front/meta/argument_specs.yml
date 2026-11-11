@@ -1,0 +1,62 @@
+---
+argument_specs:
+  main:
+    short_description: Caddy in front of Stalwart (and anything else on the host), with the certificates
+    description: Every variable also has a comment in defaults/main.yml.
+    options:
+      stalwart_hostname: {type: str, description: "Where Stalwart listens, for example mail.example.org; forwarded entirely to Stalwart. Needs no stalwart_domains entry."}
+      stalwart_domains:
+        type: list
+        elements: dict
+        default: []
+        description: Mail domains (the part after the @).
+        options:
+          name: {type: str, required: true, description: "The domain."}
+          state: {type: str, default: present, choices: [present, absent], description: "absent removes the Caddy sites too."}
+          dns: {type: str, description: "DNS provider for DNS-01 and for Stalwart's records (a key of dns_key_map)."}
+          zone_origin: {type: str, description: "DNS zone at the provider when it is a parent of name."}
+          subdomains: {type: list, elements: str, description: "Overrides stalwart_subdomains for this domain; [] for none."}
+          catch_all: {type: str, description: "Catch-all address (used by stalwart_config)."}
+          wildcard: {type: bool, default: true, description: "false: no wildcard certificate, every name gets its own."}
+          serve_http: {type: bool, default: false, description: "true: forward everything on the domain's own name to Stalwart."}
+      stalwart_subdomains: {type: list, elements: str, default: [mta-sts, autoconfig, autodiscover, ua-auto-config], description: "Subdomains of every mail domain forwarded to Stalwart."}
+      stalwart_serve_http: {type: bool, default: false, description: "Default of serve_http for all domains."}
+      caddy_domains:
+        type: list
+        elements: dict
+        default: []
+        description: All other sites.
+        options:
+          name: {type: str, required: true, description: "Host name; '*.example.org' for a wildcard (needs dns)."}
+          state: {type: str, default: present, choices: [present, absent], description: "absent removes the site."}
+          dns: {type: str, description: "DNS provider for DNS-01 (a key of dns_key_map)."}
+          user: {type: str, description: "Forward to this account's own Caddy (caddy_user_instances)."}
+          directive: {type: str, description: "Caddyfile directives of the site, for example 'reverse_proxy 127.0.0.1:3000'."}
+      bulwark_hostname: {type: str, description: "Host name of Bulwark; served and allowed to call Stalwart across origins."}
+      caddy_bulwark_directive: {type: str, description: "Directives of the Bulwark site."}
+      stalwart_cors_origins: {type: list, elements: str, default: [], description: "Further origins (scheme://host) allowed to call Stalwart across origins."}
+      dns_key_map: {type: dict, default: {}, description: "Credentials per DNS provider: {hetzner: {api_token: ...}}."}
+      caddy_user_instances: {type: list, elements: raw, default: [], description: "Their hosts become sites that forward to the account's Caddy. Described in the caddy_user_instances role."}
+      caddy_build_method: {type: str, default: download, choices: [download, xcaddy, binary], description: "How the Caddy binary is obtained."}
+      caddy_dns_plugins: {type: list, elements: str, default: [], description: "Names below github.com/caddy-dns/."}
+      caddy_extra_modules: {type: list, elements: str, default: [], description: "Complete module paths."}
+      caddy_download_url: {type: str, description: "Replace the whole download URL."}
+      caddy_xcaddy_modules: {type: list, elements: str, default: [], description: "Arguments of --with, for example 'github.com/caddy-dns/gandi'."}
+      caddy_xcaddy_replaces: {type: list, elements: str, default: [], description: "Arguments of --replace, for example 'mod=fork@v1'."}
+      caddy_xcaddy_caddy_version: {type: str, default: v2.11.9, description: "Caddy version to build, or latest."}
+      caddy_xcaddy_runner: {type: str, default: podman, choices: [podman, local], description: "How xcaddy runs."}
+      caddy_builder_image: {type: str, description: "Builder image for the podman runner."}
+      caddy_builder_remove_image: {type: bool, default: false, description: "Remove the builder image after a build."}
+      caddy_build_cache_dir: {type: path, description: "Cache of finished builds on the controller."}
+      caddy_binary_src: {type: path, description: "Prebuilt Caddy on the controller (build method binary)."}
+      caddy_binary_sha256: {type: str, description: sha256 of caddy_binary_src.}
+      caddy_binary_path: {type: path, default: /usr/local/bin/caddy, description: "Where the binary goes."}
+      caddy_tls_mode: {type: str, default: acme, choices: [acme, internal], description: "acme: real certificates; internal: Caddy's own CA, for tests."}
+      acme_directory_url: {type: str, default: "https://acme-v02.api.letsencrypt.org/directory", description: "ACME directory."}
+      acme_email: {type: str, description: "Contact address for the ACME account."}
+      acme_ca_root_pem_path: {type: path, description: "Root certificate of a private ACME CA."}
+      caddy_debug: {type: bool, default: false, description: "Verbose Caddy log."}
+      caddy_cert_wait_timeout: {type: int, default: 180, description: "Seconds to wait for the first certificate of each Stalwart name."}
+      caddy_dns_field_map: {type: dict, description: "Per-provider details of the Caddy DNS plugins."}
+      caddy_front_state: {type: str, default: present, choices: [present, absent], description: "absent removes the unit, binary and configuration."}
+      caddy_purge_data: {type: bool, default: false, description: "With absent, also delete the ACME state and certificate copies."}

@@ -1,0 +1,44 @@
+---
+argument_specs:
+  main:
+    short_description: Install pinned Stalwart server and stalwart-cli binaries, the systemd unit and the data store configuration
+    description:
+      - Needs a fallback administrator password (stalwart_admin_password, at least 12 characters), which has no default.
+      - Every variable also has a comment in defaults/main.yml.
+    options:
+      stalwart_admin_password:
+        type: str
+        required: true
+        no_log: true
+        description: Password of the fallback administrator. Keep it in a vault.
+      stalwart_admin_user: {type: str, default: admin, description: "Name of the fallback administrator."}
+      stalwart_version: {type: str, default: "1.1.0", description: "Stalwart release to install. Needs a checksum in stalwart_checksums or stalwart_checksum."}
+      stalwart_cli_version: {type: str, default: "1.0.14", description: "stalwart-cli release; has to match the server."}
+      stalwart_checksums: {type: dict, description: "Per version and architecture sha256 of the server tarball: {'1.1.0': {x86_64: 'sha256:...', aarch64: 'sha256:...'}}."}
+      stalwart_cli_checksums: {type: dict, description: "Same shape, for stalwart-cli."}
+      stalwart_checksum: {type: str, description: "Override the looked-up server checksum (sha256:...)."}
+      stalwart_cli_checksum: {type: str, description: "Override the looked-up CLI checksum (sha256:...)."}
+      stalwart_verify_sigstore: {type: bool, default: false, description: "Also verify the sigstore bundle; needs cosign on the target."}
+      stalwart_install_vandelay: {type: bool, default: false, description: "Also install Vandelay, the account migration tool."}
+      stalwart_vandelay_version: {type: str, default: "1.0.15", description: "Vandelay release."}
+      stalwart_vandelay_checksums: {type: dict, description: "Per version and architecture sha256, same shape as stalwart_checksums."}
+      stalwart_vandelay_checksum: {type: str, description: "Override the looked-up Vandelay checksum."}
+      stalwart_system_user: {type: str, default: stalwart, description: "Account the server runs as."}
+      stalwart_system_group: {type: str, default: stalwart, description: "Group of that account."}
+      stalwart_bin_dir: {type: path, default: /usr/local/bin, description: "Where the binaries go."}
+      stalwart_config_dir: {type: path, default: /etc/stalwart, description: "Configuration and environment files."}
+      stalwart_data_dir: {type: path, default: /var/lib/stalwart, description: "Data directory (RocksDB store)."}
+      stalwart_log_dir: {type: path, default: /var/log/stalwart, description: "Log directory."}
+      stalwart_data_store: {type: dict, description: "The only setting kept on disk, as in config.json: {'@type': RocksDb, path: ...}."}
+      stalwart_mgmt_url: {type: str, description: "URL of the loopback management listener the CLI uses."}
+      stalwart_service_name: {type: str, default: stalwart, description: "Name of the systemd unit."}
+      stalwart_service_enabled: {type: bool, default: true, description: "Enable the unit at boot."}
+      stalwart_conflicting_services:
+        type: list
+        elements: str
+        default: []
+        description: "Services stopped and disabled first, for example [apache2, postfix, dovecot, rspamd, opendkim]."
+      stalwart_check_debops_groups: {type: bool, default: true, description: "Fail when the host is still in the DebOps group of a conflicting service."}
+      stalwart_debops_service_groups: {type: dict, description: "Map of service name to DebOps inventory group."}
+      stalwart_install_state: {type: str, default: present, choices: [present, absent], description: "absent removes the unit, binaries and markers."}
+      stalwart_purge_data: {type: bool, default: false, description: "With absent, also delete data, configuration, logs and the account."}
