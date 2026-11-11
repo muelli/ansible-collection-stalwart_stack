@@ -109,19 +109,44 @@
   when: caddy_user_caddyfile_generated.changed | default(false) or caddy_user_caddyfile_copied.changed | default(false)
 
 - name: Request a page through the front socket
-  ansible.builtin.command:
-    argv:
-      - curl
-      - --silent
-      - --show-error
-      - --max-time
-      - "20"
-      - --unix-socket
-      - "{{ caddy_user_socket_dir }}/{{ _caddy_user }}.sock"
-      - --header
-      - "Host: {{ _caddy_user_sites[0].hosts[0] }}"
-      - http://localhost/
-  register: caddy_user_smoke
-  changed_when: false
   when: caddy_user_smoke_test | bool
-  failed_when: caddy_user_smoke.rc != 0 or caddy_user_smoke.stdout | length == 0
+  block:
+    - name: Request a page through the front socket
+      ansible.builtin.command:
+        argv:
+          - curl
+          - --silent
+          - --show-error
+          - --max-time
+          - "20"
+          - --unix-socket
+          - "{{ caddy_user_socket_dir }}/{{ _caddy_user }}.sock"
+          - --header
+          - "Host: {{ _caddy_user_sites[0].hosts[0] }}"
+          - http://localhost/
+      register: caddy_user_smoke
+      changed_when: false
+      failed_when: caddy_user_smoke.rc != 0 or caddy_user_smoke.stdout | length == 0
+  rescue:
+    - name: Ask the instance why it does not answer
+      ansible.builtin.shell:
+        cmd: |
+          caddy validate --config {{ _caddy_home }}/.config/caddy/Caddyfile 2>&1 | tail -n 15
+          echo '--- journal of caddy-user.service'
+          journalctl --user -u caddy-user.service -n 15 --no-pager 2>&1
+        executable: /bin/bash
+      become: true
+      become_user: "{{ _caddy_user }}"
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ _caddy_uid }}"
+        PATH: "{{ caddy_binary_path | dirname }}:/usr/bin:/bin"
+      register: caddy_user_why
+      changed_when: false
+      failed_when: false
+
+    - name: Fail with the reason
+      ansible.builtin.fail:
+        msg: |-
+          The Caddy of {{ _caddy_user }} did not answer on {{ caddy_user_socket_dir }}/{{ _caddy_user }}.sock for Host {{ _caddy_user_sites[0].hosts[0] }}.
+          curl: {{ caddy_user_smoke.stderr | default('') }}
+          {{ caddy_user_why.stdout | default('') }}
