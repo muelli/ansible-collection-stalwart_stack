@@ -6,11 +6,24 @@ argument_specs:
       caddy_user_instances:
         type: list
         default: []
-        elements: raw
-        description:
-          - Each entry is an account name (a string) or a dict. The accounts must exist already.
-          - "Dict keys: name (required); state (present or absent); sites; purge (bool, with absent); release_linger (bool, with absent)."
-          - "A site is {name, state, hosts: [...], directive: '...', dns: provider}; the role writes it to ~/.config/caddy/conf.d/<name>.conf (state absent removes the file). Other files in conf.d are never touched."
+        elements: dict
+        description: "One Caddy per account; the accounts must exist already. Each entry is a dict, a bare account name is not accepted."
+        options:
+          name: {type: str, required: true, description: "The account."}
+          state: {type: str, choices: [present, absent], description: "Defaults to caddy_user_instances_state."}
+          sites:
+            type: list
+            elements: dict
+            default: []
+            description: "conf.d/<name>.conf files this role writes into the account's ~/.config/caddy/conf.d. Other files in conf.d are never touched."
+            options:
+              name: {type: str, description: "File name without .conf; defaults to the first host."}
+              state: {type: str, default: present, choices: [present, absent], description: "absent removes the file and the front site of its hosts."}
+              hosts: {type: list, elements: str, description: "Names the fronting Caddy forwards to this account; required unless the site is absent."}
+              directive: {type: str, description: "Body of the site block, as in a Caddyfile."}
+              dns: {type: str, description: "DNS provider for the certificate of these hosts (a key of dns_key_map); default from the Stalwart domain they lie below."}
+          purge: {type: bool, default: false, description: "With state absent, also delete ~/.config/caddy."}
+          release_linger: {type: bool, default: false, description: "With state absent, switch lingering off again."}
       caddy_user_instances_state: {type: str, default: present, choices: [present, absent], description: "Default state of entries without their own."}
       caddy_user_socket_dir: {type: path, default: /run/caddy-user-sockets, description: "Directory of the sockets."}
       caddy_binary_path: {type: path, default: /usr/local/bin/caddy, description: "The Caddy binary."}

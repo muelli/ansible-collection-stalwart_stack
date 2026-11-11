@@ -2,7 +2,7 @@
 # Users that get their own Caddy. Each instance is bare minimum: a Caddyfile
 # with the global options that imports ~/.config/caddy/conf.d/*.conf, nothing
 # else. What is served is up to the account: add files to conf.d yourself, they
-# are never touched. Each entry is an account name or a dict:
+# are never touched. Each entry is a dict:
 #   - name: alice                  # the account; it must exist already
 #     state: present               # default; absent removes the units, see below
 #     sites:                       # optional: conf.d files this role writes

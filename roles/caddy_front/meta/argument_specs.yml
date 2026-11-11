@@ -36,7 +36,27 @@ argument_specs:
       caddy_bulwark_directive: {type: str, description: "Directives of the Bulwark site."}
       stalwart_cors_origins: {type: list, elements: str, default: [], description: "Further origins (scheme://host) allowed to call Stalwart across origins."}
       dns_key_map: {type: dict, default: {}, description: "Credentials per DNS provider: {hetzner: {api_token: ...}}."}
-      caddy_user_instances: {type: list, elements: raw, default: [], description: "Their hosts become sites that forward to the account's Caddy. Described in the caddy_user_instances role."}
+      caddy_user_instances:
+        type: list
+        default: []
+        elements: dict
+        description: "Their site hosts become sites that forward to the account's Caddy (see the caddy_user_instances role). Each entry is a dict, a bare account name is not accepted."
+        options:
+          name: {type: str, required: true, description: "The account."}
+          state: {type: str, choices: [present, absent], description: "Defaults to caddy_user_instances_state."}
+          sites:
+            type: list
+            elements: dict
+            default: []
+            description: "conf.d/<name>.conf files this role writes into the account's ~/.config/caddy/conf.d. Other files in conf.d are never touched."
+            options:
+              name: {type: str, description: "File name without .conf; defaults to the first host."}
+              state: {type: str, default: present, choices: [present, absent], description: "absent removes the file and the front site of its hosts."}
+              hosts: {type: list, elements: str, description: "Names the fronting Caddy forwards to this account; required unless the site is absent."}
+              directive: {type: str, description: "Body of the site block, as in a Caddyfile."}
+              dns: {type: str, description: "DNS provider for the certificate of these hosts (a key of dns_key_map); default from the Stalwart domain they lie below."}
+          purge: {type: bool, default: false, description: "With state absent, also delete ~/.config/caddy."}
+          release_linger: {type: bool, default: false, description: "With state absent, switch lingering off again."}
       caddy_build_method: {type: str, default: download, choices: [download, xcaddy, binary], description: "How the Caddy binary is obtained."}
       caddy_dns_plugins: {type: list, elements: str, default: [], description: "Names below github.com/caddy-dns/."}
       caddy_extra_modules: {type: list, elements: str, default: [], description: "Complete module paths."}

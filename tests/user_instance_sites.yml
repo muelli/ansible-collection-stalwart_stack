@@ -16,7 +16,7 @@
           - hosts: [other.net, bare.invalid]
             dns: own
       - { name: gone, state: absent, sites: [{ hosts: [gone.test.example.org] }] }
-      - plainname
+      - { name: plainname }
       - { name: nosites }
       - name: partial
         sites:
