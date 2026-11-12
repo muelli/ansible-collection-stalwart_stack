@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- `stalwart_accounts` and `stalwart_lists` manage Stalwart accounts (name, domain,
+  description, aliases, no credentials) and mailing lists, with `state: absent` to
+  delete them (before the domains, so a domain can go in the same run). An account
+  can set `forward_to` (and `forward_keep_copy`): a Sieve `redirect`, installed as the
+  administrator through the new module `stalwart_sieve_forward`, that sends the
+  mail with the account's own address as envelope sender. A failed apply is explained
+  afterwards with stalwart-cli's output and a hint when a domain is missing; nothing is
+  checked beforehand.
+
 - `stalwart_domains[].catch_all` sets Stalwart's catch-all address
   (`Domain.catchAllAddress`) for a domain. Leaving it out keeps the server's
   value; `null` or `""` clears it.

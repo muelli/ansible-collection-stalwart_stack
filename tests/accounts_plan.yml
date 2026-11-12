@@ -1,0 +1,52 @@
+---
+# Offline check of how stalwart_accounts and stalwart_lists end up in the plan
+# (run by tests/run.sh; no host needed). Entries without `state` count as present,
+# entries marked absent are left out (tasks/absent_addresses.yml deletes them).
+- name: Render the plan for accounts and lists
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  vars_files:
+    - ../roles/stalwart_config/defaults/main.yml
+  tasks:
+    # set_fact, because vars_files (the role defaults) outrank play vars.
+    - name: Test inputs
+      ansible.builtin.set_fact:
+        stalwart_hostname: mail.example.org
+        stalwart_domains:
+          - {name: example.org, state: present}
+          - {name: other.example, state: present, catch_all: team@example.org}
+        stalwart_accounts:
+          - {name: alice, domain: example.org, description: Alice, aliases: [ebay@example.org, shop@other.example]}
+          - {name: bob, domain: example.org, forward_to: bob@elsewhere.example}
+          - {name: gone, domain: example.org, state: absent}
+          - {name: noalias, domain: example.org}
+        stalwart_lists:
+          - {name: team, domain: example.org, recipients: [alice@example.org, x@elsewhere.example], aliases: [crew@other.example]}
+          - {name: old, domain: example.org, state: absent}
+    - name: Render
+      ansible.builtin.set_fact:
+        ops: >-
+          {{ lookup('ansible.builtin.template', '../roles/stalwart_config/templates/plan.ndjson.j2').splitlines() | map('from_json') | list }}
+    - name: Pick accounts and lists
+      ansible.builtin.set_fact:
+        accounts: "{{ (ops | selectattr('object', 'equalto', 'Account') | list) }}"
+        lists: "{{ (ops | selectattr('object', 'equalto', 'MailingList') | list) }}"
+    - name: Check them
+      ansible.builtin.assert:
+        that:
+          - accounts | length == 3
+          - lists | length == 1
+          - accounts | map(attribute='value') | map('dict2items') | flatten | map(attribute='key') | sort | list
+            == ['account-alice-example-org', 'account-bob-example-org', 'account-noalias-example-org']
+          - accounts[0].matchOn == ['name', 'domainId']
+          - accounts[0].value['account-alice-example-org'].domainId == '#domain-example-org'
+          - "accounts[0].value['account-alice-example-org'].aliases['1'] == {'name': 'shop', 'domainId': '#domain-other-example', 'enable': true}"
+          - accounts[0].value['account-alice-example-org'].description == 'Alice'
+          # no credentials in any account; forward_to does not touch the plan; no aliases key when not set
+          - "'credentials' not in accounts[0].value['account-alice-example-org']"
+          - "'aliases' not in accounts[2].value['account-noalias-example-org']"
+          - "lists[0].value['list-team-example-org'].recipients == {'alice@example.org': true, 'x@elsewhere.example': true}"
+          - lists[0].value['list-team-example-org'].aliases['0'].domainId == '#domain-other-example'
+          - ops | selectattr('object', 'equalto', 'Domain') | map(attribute='value') | map('dict2items') | flatten | selectattr('value.catchAllAddress', 'defined') | list | length == 1
+        quiet: true

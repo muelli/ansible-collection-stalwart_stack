@@ -1,0 +1,37 @@
+---
+# Looks up what the server has now and sets
+#   stalwart_account_ids: {"name@domain": id}
+#   stalwart_list_ids:    {"name@domain": id}
+# Used after the fact (to delete absent entries, to address the Sieve script of an
+# account), never to decide beforehand whether the plan would work: the apply is
+# the only authority on that.
+- name: List the domains, accounts and mailing lists of the server
+  ansible.builtin.command:
+    argv: ["{{ stalwart_bin_dir }}/stalwart-cli", query, "{{ item.object }}", --fields, "{{ item.fields }}", --json, --no-color]
+  environment:
+    STALWART_URL: "{{ stalwart_mgmt_url }}"
+    STALWART_USER: "{{ stalwart_admin_user }}"
+    STALWART_PASSWORD: "{{ stalwart_admin_password }}"
+  loop:
+    - {object: Domain, fields: name}
+    - {object: Account, fields: "name,domainId"}
+    - {object: MailingList, fields: "name,domainId"}
+  loop_control:
+    label: "{{ item.object }}"
+  register: stalwart_listing
+  changed_when: false
+
+- name: Index them by address
+  ansible.builtin.set_fact:
+    stalwart_account_ids: >-
+      {%- set dom = {} -%}
+      {%- for l in stalwart_listing.results[0].stdout_lines if l is match('^[{]') -%}{%- set o = l | from_json -%}{%- set _ = dom.update({o.id: o.name}) -%}{%- endfor -%}
+      {%- set out = {} -%}
+      {%- for l in stalwart_listing.results[1].stdout_lines if l is match('^[{]') -%}{%- set o = l | from_json -%}{%- set _ = out.update({o.name ~ '@' ~ dom[o.domainId] | default(o.domainId): o.id}) -%}{%- endfor -%}
+      {{ out }}
+    stalwart_list_ids: >-
+      {%- set dom = {} -%}
+      {%- for l in stalwart_listing.results[0].stdout_lines if l is match('^[{]') -%}{%- set o = l | from_json -%}{%- set _ = dom.update({o.id: o.name}) -%}{%- endfor -%}
+      {%- set out = {} -%}
+      {%- for l in stalwart_listing.results[2].stdout_lines if l is match('^[{]') -%}{%- set o = l | from_json -%}{%- set _ = out.update({o.name ~ '@' ~ dom[o.domainId] | default(o.domainId): o.id}) -%}{%- endfor -%}
+      {{ out }}

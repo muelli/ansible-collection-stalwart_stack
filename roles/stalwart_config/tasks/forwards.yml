@@ -1,0 +1,27 @@
+---
+# Sieve forwards of accounts (`forward_to`). Runs after the plan, because the
+# account has to exist; the script is installed as the administrator, so no
+# password of the account is involved.
+- name: Wait for the management listener
+  ansible.builtin.wait_for:
+    host: "{{ stalwart_mgmt_bind.rsplit(':', 1)[0] }}"
+    port: "{{ stalwart_mgmt_bind.rsplit(':', 1)[1] | int }}"
+    timeout: 60
+
+- name: Look up what the server has
+  ansible.builtin.include_tasks: list_ids.yml
+
+- name: Install or remove the forwarding script of each account
+  stalwart_sieve_forward:
+    url: "{{ stalwart_mgmt_url }}"
+    user: "{{ stalwart_admin_user }}"
+    password: "{{ stalwart_admin_password }}"
+    account_id: "{{ stalwart_account_ids[item.name ~ '@' ~ item.domain] }}"
+    state: "{{ 'present' if (item.forward_to | default('', true) | length) > 0 else 'absent' }}"
+    content: "{{ _head ~ (_copy_req if item.forward_keep_copy | default(false) | bool else '') ~ 'redirect' ~ (' :copy' if item.forward_keep_copy | default(false) | bool else '') ~ ' \"' ~ (item.forward_to | default('', true)) ~ '\";\n' }}"
+  vars:
+    _head: "# Managed by Ansible (stalwart_config), forward_to of {{ item.name }}@{{ item.domain }}\n"
+    _copy_req: "require \"copy\";\n"
+  loop: "{{ stalwart_accounts_norm | rejectattr('state', 'equalto', 'absent') | selectattr('forward_to', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.name }}@{{ item.domain }}"

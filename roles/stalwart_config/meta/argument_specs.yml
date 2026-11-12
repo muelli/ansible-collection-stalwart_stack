@@ -20,6 +20,31 @@ argument_specs:
           catch_all: {type: str, description: "Catch-all address, which must exist. Left out keeps the server's value; null or '' clears it."}
           wildcard: {type: bool, default: true, description: "false: no wildcard certificate."}
           serve_http: {type: bool, default: false, description: "true: Caddy forwards everything on the domain's own name to Stalwart."}
+      stalwart_accounts:
+        type: list
+        elements: dict
+        default: []
+        description: Accounts (name and domain; no credentials are managed).
+        options:
+          name: {type: str, required: true, description: "Local part of the account."}
+          domain: {type: str, required: true, description: "Domain of the account; must be in stalwart_domains."}
+          state: {type: str, default: present, choices: [present, absent], description: "absent deletes the account and its mail."}
+          description: {type: str, description: "Free text."}
+          aliases: {type: list, elements: str, description: "Full addresses on domains of stalwart_domains. The role owns the list: others are removed; [] removes all; left out keeps the server's."}
+          forward_to: {type: str, description: "One address every message is redirected to by the Sieve script stalwart-forward. null or '' removes the script; left out leaves the scripts alone."}
+          forward_keep_copy: {type: bool, default: false, description: "Also keep the message in the mailbox."}
+      stalwart_lists:
+        type: list
+        elements: dict
+        default: []
+        description: Mailing lists, expanding to any addresses, with the original envelope sender kept.
+        options:
+          name: {type: str, required: true, description: "Local part of the list address."}
+          domain: {type: str, required: true, description: "Domain of the list; must be in stalwart_domains."}
+          state: {type: str, default: present, choices: [present, absent], description: "absent destroys the list."}
+          recipients: {type: list, elements: str, default: [], description: "Member addresses, local or external."}
+          aliases: {type: list, elements: str, description: "Further addresses of the list."}
+          description: {type: str, description: "Free text."}
       stalwart_redirect_root: {type: str, default: "", description: "Where / on the Stalwart host name redirects to; \"\" keeps Stalwart's /account."}
       stalwart_check_zone: {type: bool, default: true, description: "Fail when Stalwart's CNAME records and Caddy's subdomain sites differ."}
       stalwart_permissive_cors: {type: bool, default: false, description: "Stalwart's own allow-every-origin switch."}

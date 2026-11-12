@@ -11,6 +11,7 @@ trap 'rm -f "$inv"' EXIT
 step "syntax check" ansible-playbook -i "$inv" --syntax-check playbook.yml teardown.yml
 step "derived Caddy sites" ansible-playbook -i localhost, -c local tests/user_instance_sites.yml
 step "relay SPF check" ansible-playbook -i localhost, -c local tests/relay_spf.yml
+step "accounts and lists in the plan" ansible-playbook -i localhost, -c local tests/accounts_plan.yml
 step "YAML and Jinja parse" python3 - <<'PY'
 import glob, sys, yaml, jinja2
 bad = 0

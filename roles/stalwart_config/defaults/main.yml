@@ -29,6 +29,40 @@ stalwart_default_domain: "{{ (stalwart_domains | selectattr('state', 'equalto', 
 #                           # (default false: the name is free for a site of yours)
 stalwart_domains: []
 
+# Accounts (Account objects of type User, matched by name and domain). Credentials
+# are not managed here: a new account has none and cannot log in (it still receives
+# mail), and an update never touches the password of an existing one.
+#   - name: muelli                  # local part
+#     domain: example.org           # must be in stalwart_domains
+#     state: present                # default; absent DELETES the account and its mail
+#     description: Tobias           # optional
+#     aliases:                      # optional; full addresses on any domain of stalwart_domains.
+#       - ebay@example.org          # The role owns the list: other aliases are removed. Left out
+#       - shop@other.example        # keeps the server's aliases, [] removes them all.
+#     forward_to: me@elsewhere.org  # optional; a Sieve script `stalwart-forward` redirects every
+#                                   # message to this one address. The envelope sender becomes the
+#                                   # account's own address, which keeps SPF at the receiver
+#                                   # passing (a list or catch-all keeps the original sender and
+#                                   # fails SPF for mail from other domains), and DKIM stays intact.
+#                                   # The script becomes the account's ACTIVE script; others are kept
+#                                   # but inactive. Left out leaves the scripts alone; null or "" removes
+#                                   # ours. One address only: Stalwart allows one redirect per script by
+#                                   # default; use a stalwart_lists entry for several targets.
+#     forward_keep_copy: false      # default; true also keeps the message in the mailbox
+stalwart_accounts: []
+
+# Mailing lists (MailingList objects, matched by name and domain). They expand to
+# any addresses, local or external, and keep the original envelope sender.
+#   - name: team
+#     domain: example.org
+#     recipients: [a@example.org, b@elsewhere.org]
+#     aliases: [crew@example.org]   # optional, like for accounts
+#     description: The team         # optional
+#     state: present                # default; absent destroys the list
+# A whole-domain catch-all that forwards is a list plus `catch_all:` of the domain
+# pointing at it (catch_all: team@example.org).
+stalwart_lists: []
+
 # Where `/` on the Stalwart host name redirects to (Http.redirectRoot). "" leaves
 # Stalwart's setting alone, which is /account.
 stalwart_redirect_root: ""

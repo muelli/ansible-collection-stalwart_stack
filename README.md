@@ -188,6 +188,60 @@ caddy_user_instances:
           respond "Hello" 200
 ```
 
+### Accounts, aliases, forwards and lists
+
+`stalwart_accounts` and `stalwart_lists` map one to one onto Stalwart's `Account`
+(type User) and `MailingList` objects. The roles do not manage credentials: a new
+account has none, so it receives mail but cannot log in, and an update never
+touches the password of an existing one (set it with `stalwart-cli update Account
+<id> --json '{"credentials":{"0":{"@type":"Password","secret":"..."}}}'`).
+
+```yaml
+stalwart_accounts:
+  - name: muelli
+    domain: example.org              # a present entry of stalwart_domains
+    aliases: [ebay@example.org, shop@other.example]
+  - name: knochen                    # a forward needs an account to hold the script
+    domain: example.org
+    forward_to: someone@gmx.net      # Sieve redirect; forward_keep_copy: true keeps a copy too
+stalwart_lists:
+  - name: team
+    domain: example.org
+    recipients: [a@example.org, b@gmail.com]
+stalwart_domains:
+  - name: old.example.org
+    catch_all: team@example.org      # a whole-domain catch-all that fans out
+```
+
+Which one to use for a Postfix `virtual_alias_maps` entry:
+
+| Postfix target | Use |
+|---|---|
+| one local mailbox | `aliases` of that account |
+| one external address | `forward_to` of an account |
+| several addresses, local or external | a `stalwart_lists` entry |
+| `@domain` to somewhere | `catch_all` of the domain, pointing at an account or list |
+
+A Sieve redirect (`forward_to`) sends the message with the account's own address as
+envelope sender and leaves the headers, DKIM signatures and body untouched, so a
+receiver checking SPF sees your own domain. A list keeps the original sender in the
+envelope, which fails SPF at Gmail or GMX for mail from other domains. Stalwart allows
+one redirect per script by default, hence one address. The role installs the script as
+the administrator (no password needed); it becomes the account's active script and
+other scripts stay, inactive.
+
+Providers that greylist (anonbox, Guerrilla Mail) accept a forward on the second
+attempt, a couple of minutes later.
+
+`aliases` is owned by the role: others are removed, `[]` removes all, leaving it out
+keeps what the server has. The domains of the aliases must be present entries of
+`stalwart_domains`.
+
+Nothing is checked beforehand: the plan is applied and a failure is explained
+afterwards. An alias or list on a domain that is not in `stalwart_domains`, for
+example, ends the run with Stalwart's message and the names of the domains concerned.
+The apply is not atomic, so objects earlier in the plan are already updated.
+
 ### The Caddy of a user
 
 Each instance is bare minimum: a Caddyfile with the global options that imports
@@ -235,19 +289,21 @@ adds, and sends no CORS headers to any other origin. Stalwart's own
 
 ## Removing things
 
-* Entries of `stalwart_domains`, `stalwart_relay_hosts`,
-  `stalwart_server_listeners` and `caddy_user_instances` accept
-  `state: absent`. Files, systemd units, certificates, group memberships and the
-  objects inside Stalwart (domain, its DKIM keys, certificate, relay, listener)
-  are removed. `stalwart_absent_dns_providers` removes DNS providers.
+* Entries of `stalwart_domains`, `stalwart_accounts`, `stalwart_lists`,
+  `stalwart_relay_hosts`, `stalwart_server_listeners` and `caddy_user_instances`
+  accept `state: absent`. Files, systemd units, certificates, group memberships and
+  the objects inside Stalwart (domain, its DKIM keys, certificate, account with its
+  mail and scripts, list, relay, listener) are removed. `stalwart_absent_dns_providers`
+  removes DNS providers. Deleting an account deletes its mail. `forward_to: ~`
+  removes only the forwarding script.
 * The default domain cannot be removed. `SystemSettings.defaultDomainId` points
   to `stalwart_default_domain`, which is the first `present` entry of
   `stalwart_domains` (it is not derived from `stalwart_hostname`, which only
   sets the default hostname). Stalwart also refuses to delete a domain that
   still has accounts. To remove the default domain, put another present entry
-  first and run, delete the domain's accounts (the roles do not manage
-  accounts: `stalwart-cli delete Account --ids <id>`), then mark the domain
-  `absent` and run again.
+  first and run. Mark the domain's accounts and lists `state: absent` in the same
+  run as the domain: they are removed before the domain. An account or list that
+  stays makes the run fail, naming the domain.
 * Removing a domain does not remove the DNS records Stalwart published for it.
   Delete them at the provider yourself. Recreating the domain publishes the
   full set again, provided `zone_origin` is right.

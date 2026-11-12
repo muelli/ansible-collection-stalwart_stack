@@ -1,0 +1,31 @@
+---
+# Accounts and mailing lists marked `state: absent`. They are looked up by name and
+# domain and deleted by id, before the plan: a domain that is itself being removed
+# cannot go while an account or list still belongs to it. Deleting an account
+# deletes its mail. An entry the server does not have is simply skipped.
+- name: Look up what the server has
+  ansible.builtin.include_tasks: list_ids.yml
+
+- name: Delete the accounts that are marked absent
+  ansible.builtin.command:
+    argv: ["{{ stalwart_bin_dir }}/stalwart-cli", delete, Account, --ids, "{{ item.value }}", --no-color]
+  environment:
+    STALWART_URL: "{{ stalwart_mgmt_url }}"
+    STALWART_USER: "{{ stalwart_admin_user }}"
+    STALWART_PASSWORD: "{{ stalwart_admin_password }}"
+  loop: "{{ stalwart_account_ids | dict2items | selectattr('key', 'in', stalwart_absent_accounts | map(attribute='address') | list) | list }}"
+  loop_control:
+    label: "{{ item.key }}"
+  changed_when: true
+
+- name: Destroy the mailing lists that are marked absent
+  ansible.builtin.command:
+    argv: ["{{ stalwart_bin_dir }}/stalwart-cli", delete, MailingList, --ids, "{{ item.value }}", --no-color]
+  environment:
+    STALWART_URL: "{{ stalwart_mgmt_url }}"
+    STALWART_USER: "{{ stalwart_admin_user }}"
+    STALWART_PASSWORD: "{{ stalwart_admin_password }}"
+  loop: "{{ stalwart_list_ids | dict2items | selectattr('key', 'in', stalwart_absent_lists | map(attribute='address') | list) | list }}"
+  loop_control:
+    label: "{{ item.key }}"
+  changed_when: true

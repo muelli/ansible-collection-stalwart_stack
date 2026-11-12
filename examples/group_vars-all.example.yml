@@ -18,6 +18,20 @@ stalwart_domains:
   - name: old.example.org
     state: absent
 
+# Accounts without credentials (set passwords yourself), their aliases, a Sieve forward,
+# and a mailing list. See the README, "Accounts, aliases, forwards and lists".
+stalwart_accounts:
+  - name: alice
+    domain: mail.example.org
+    aliases: [shop@mail.example.org]
+  - name: forwarder
+    domain: mail.example.org
+    forward_to: alice@elsewhere.example
+stalwart_lists:
+  - name: team
+    domain: mail.example.org
+    recipients: [alice@mail.example.org, bob@elsewhere.example]
+
 # Other sites. `user:` forwards to that user's own Caddy.
 caddy_domains:
   - name: www.example.org
