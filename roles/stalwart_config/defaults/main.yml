@@ -49,7 +49,46 @@ stalwart_domains: []
 #                                   # ours. One address only: Stalwart allows one redirect per script by
 #                                   # default; use a stalwart_lists entry for several targets.
 #     forward_keep_copy: false      # default; true also keeps the message in the mailbox
+#     groups: [support@example.org] # optional; the groups the account is a member of (Account.memberGroupIds,
+#                                   # entries of stalwart_groups). Members see the group's mailbox, calendar
+#                                   # and address book as extra accounts and may send as the group address.
+#                                   # Left out keeps the memberships, [] removes them all.
 stalwart_accounts: []
+
+# Groups (Account objects of type Group, matched by name and domain): a shared mailbox,
+# calendar and address book with an address of its own (support@, info@). Members are
+# declared on the accounts (`groups:` above), as Stalwart stores them. A group cannot log in
+# itself, and mail to it (or its aliases) lands in its own Inbox.
+#   - name: support
+#     domain: example.org           # must be in stalwart_domains
+#     aliases: [help@example.org]   # optional, like for accounts
+#     description: Support team     # optional
+#     state: present                # default; absent DELETES the group and its mail, and fails
+#                                   # while an account still lists it in `groups`
+stalwart_groups: []
+
+# Folders, calendars and address books of accounts and groups, and who they are shared with.
+# Everything is done over JMAP as the administrator. Every account and group already has a
+# default calendar ("Stalwart Calendar (<address>)") and address book, plus the usual mail
+# folders (Inbox, Sent Items, ...); name one of them to manage only its sharing.
+#   - owner: alice@example.org      # account or group address
+#     kind: folder                  # folder | calendar | addressbook
+#     name: Projects/Alpha          # a folder path with /, created with its parents when missing
+#     share_with:                   # optional; replaces the whole sharing list of this one collection.
+#       bob@example.org: [mayReadItems, mayAddItems, maySetSeen]   # Left out keeps it, {} removes it.
+#       support@example.org: [mayReadItems]                        # JMAP rights, as Stalwart names them:
+#                                   # folder: mayReadItems mayAddItems mayRemoveItems maySetSeen
+#                                   #   maySetKeywords mayCreateChild mayRename mayDelete maySubmit
+#                                   #   mayShare maySetMetadata
+#                                   # calendar: mayReadFreeBusy mayReadItems mayWriteAll mayWriteOwn
+#                                   #   mayUpdatePrivate mayRSVP mayShare mayDelete maySetMetadata
+#                                   # addressbook: mayRead mayWrite mayDelete mayShare maySetMetadata
+#     state: present                # default; absent DELETES the collection (see remove_content)
+#     remove_content: false         # absent only: also delete the mail, events or contacts inside
+# Sharing is not inherited: a sub-folder needs its own entry. Two collections of one owner
+# with the same name are an error (rename or delete one yourself). Principals a share names
+# are matched by address; removing an account removes it from the shares on its own.
+stalwart_collections: []
 
 # Mailing lists (MailingList objects, matched by name and domain). They expand to
 # any addresses, local or external, and keep the original envelope sender.

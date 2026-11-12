@@ -244,6 +244,66 @@ afterwards. An alias or list on a domain that is not in `stalwart_domains`, for
 example, ends the run with Stalwart's message and the names of the domains concerned.
 The apply is not atomic, so objects earlier in the plan are already updated.
 
+### Groups, shared folders, calendars and address books
+
+A **group** (`stalwart_groups`) is an account without login that has an address of its own
+(`support@`), a mailbox, a calendar and an address book. Mail to it lands in its Inbox.
+Members are listed on their accounts (`groups: [support@example.org]`, Stalwart's
+`memberGroupIds`): they see the group as an extra account in IMAP (`Shared Folders/<group>`),
+JMAP and CalDAV/CardDAV, with full rights, and Stalwart offers them the group address as an
+identity to send from.
+
+**Sharing** (`stalwart_collections`) gives one account or group access to a folder, calendar
+or address book of another. It is done over JMAP as the administrator, so no password of the
+owner is involved. An entry names the owner, the `kind` (`folder`, `calendar`,
+`addressbook`), the `name` and optionally `share_with: {address: [rights]}`. The collection is
+created if it does not exist (a folder path such as `Projects/Alpha` creates its parents) and an
+existing one is found by name, so the default Inbox or default calendar can be named to manage
+only their sharing. `share_with` replaces the whole sharing list of that one collection (`{}`
+removes it, leaving it out keeps it). Rights are Stalwart's JMAP names (`mayReadItems`,
+`mayWriteAll`, `mayRead`, ...); the full list is in the defaults. Stalwart stores a few rights
+together (`mayWriteAll` also stores `mayWriteOwn`, `mayUpdatePrivate`, `mayRSVP`;
+`maySetSeen` and `maySetKeywords` go together), and the role knows them, so a second run
+changes nothing.
+
+```yaml
+stalwart_groups:
+  - {name: support, domain: example.org}
+stalwart_accounts:
+  - {name: alice, domain: example.org, groups: [support@example.org]}
+  - {name: bob, domain: example.org}
+stalwart_collections:
+  - owner: alice@example.org
+    kind: folder
+    name: Projects/Alpha
+    share_with:
+      bob@example.org: [mayReadItems, maySetSeen]
+  - {owner: support@example.org, kind: calendar, name: Rota, share_with: {bob@example.org: [mayReadItems]}}
+```
+
+What to know, all measured on Stalwart 1.1.0:
+
+* Sharing is not inherited. A sub-folder needs its own entry (the parent of
+  `Projects/Alpha` is created without any sharing).
+* Sharing a mail folder with someone does not let them send as the owner. For a shared
+  sending address use a group.
+* Names are not unique in Stalwart. Two collections of one owner with the same name make the
+  entry fail with their ids, and the role does not guess; rename or delete one yourself.
+* Removing an account or group removes it from the shares on its own. A group cannot be
+  deleted while an account is still a member: first run without the account's `groups`
+  (or with `groups: []`), then mark the group absent. The error names the member.
+* `state: absent` on a collection deletes it. A non-empty one is refused unless
+  `remove_content: true`. Collections of an owner that is itself absent are skipped.
+* The IMAP ACL commands are not offered (`SETACL` and `GETACL` fail), but folders shared
+  this way show up under `Shared Folders/<owner>/` and `MYRIGHTS` reports the rights.
+
+### Routing mail through a relay by sender
+
+`sender_domain_routing` picks the relay of `stalwart_relay_hosts` for outgoing mail by the
+envelope sender: `user@example.org` matches one address, `@example.org` a whole domain. This
+is Postfix's `sender_dependent_relayhost_maps`; address rules win over domain rules whatever
+their order in the list.
+
 ### The Caddy of a user
 
 Each instance is bare minimum: a Caddyfile with the global options that imports
@@ -291,8 +351,8 @@ adds, and sends no CORS headers to any other origin. Stalwart's own
 
 ## Removing things
 
-* Entries of `stalwart_domains`, `stalwart_accounts`, `stalwart_lists`,
-  `stalwart_relay_hosts`, `stalwart_server_listeners` and `caddy_user_instances`
+* Entries of `stalwart_domains`, `stalwart_accounts`, `stalwart_groups`, `stalwart_lists`,
+  `stalwart_collections`, `stalwart_relay_hosts`, `stalwart_server_listeners` and `caddy_user_instances`
   accept `state: absent`. Files, systemd units, certificates, group memberships and
   the objects inside Stalwart (domain, its DKIM keys, certificate, account with its
   mail and scripts, list, relay, listener) are removed. `stalwart_absent_dns_providers`

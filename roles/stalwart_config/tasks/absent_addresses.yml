@@ -18,6 +18,35 @@
     label: "{{ item.key }}"
   changed_when: true
 
+# After the accounts: a group that still has members fails with objectIsLinked and the
+# message names the member (Linked by: Account#<id>).
+- name: Delete the groups that are marked absent
+  ansible.builtin.command:
+    argv: ["{{ stalwart_bin_dir }}/stalwart-cli", delete, Account, --ids, "{{ item.value }}", --no-color]
+  environment:
+    STALWART_URL: "{{ stalwart_mgmt_url }}"
+    STALWART_USER: "{{ stalwart_admin_user }}"
+    STALWART_PASSWORD: "{{ stalwart_admin_password }}"
+  loop: "{{ stalwart_account_ids | dict2items | selectattr('key', 'in', stalwart_absent_groups | map(attribute='address') | list) | list }}"
+  loop_control:
+    label: "{{ item.key }}"
+  changed_when: true
+  register: stalwart_group_delete
+  failed_when: false
+
+- name: Fail when a group could not be deleted, naming who still belongs to it
+  ansible.builtin.fail:
+    msg: >-
+      Could not delete group {{ item.item.key }}: {{ (item.stdout ~ ' ' ~ item.stderr) | trim }}
+      {% if _member | length > 0 %}It is still linked by {{ _member | join(', ') }}.{% endif %}
+      Accounts that are still members must lose it from their `groups` (or be marked absent first).
+  loop: "{{ stalwart_group_delete.results | default([]) | rejectattr('rc', 'equalto', 0) | list }}"
+  loop_control:
+    label: "{{ item.item.key }}"
+  vars:
+    _linked_ids: "{{ (item.stdout ~ ' ' ~ item.stderr) | regex_findall('Linked by:\\s+Account#(\\S+)') }}"
+    _member: "{{ stalwart_account_ids | dict2items | selectattr('value', 'in', _linked_ids) | map(attribute='key') | list }}"
+
 - name: Destroy the mailing lists that are marked absent
   ansible.builtin.command:
     argv: ["{{ stalwart_bin_dir }}/stalwart-cli", delete, MailingList, --ids, "{{ item.value }}", --no-color]

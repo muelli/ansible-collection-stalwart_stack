@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- `stalwart_groups` manage Stalwart group accounts (a shared mailbox, calendar and address
+  book with its own address); accounts join them with `groups`. `stalwart_collections` manage
+  folders, calendars and address books of accounts and groups and who they are shared with
+  (`share_with`, JMAP rights), as the administrator through the new module
+  `stalwart_collection`. A group cannot be removed while an account is a member; the failure
+  names the member. Tested on a VM and on a real host.
+
 - Breaking: the rules of `sender_domain_routing` use `sender` instead of `domain`.
   `user@example.org` routes one envelope sender, `@example.org` a whole domain (as in
   Postfix's `sender_dependent_relayhost_maps`); address rules are tried before domain

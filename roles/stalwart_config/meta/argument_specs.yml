@@ -33,6 +33,30 @@ argument_specs:
           aliases: {type: list, elements: str, description: "Full addresses on domains of stalwart_domains. The role owns the list: others are removed; [] removes all; left out keeps the server's."}
           forward_to: {type: str, description: "One address every message is redirected to by the Sieve script stalwart-forward. null or '' removes the script; left out leaves the scripts alone."}
           forward_keep_copy: {type: bool, default: false, description: "Also keep the message in the mailbox."}
+          groups: {type: list, elements: str, description: "Addresses of the stalwart_groups entries the account belongs to. [] removes all memberships; left out keeps them."}
+      stalwart_groups:
+        type: list
+        elements: dict
+        default: []
+        description: Groups, a shared mailbox, calendar and address book with their own address. Members are set on the accounts (groups).
+        options:
+          name: {type: str, required: true, description: "Local part of the group address."}
+          domain: {type: str, required: true, description: "Domain of the group; must be in stalwart_domains."}
+          state: {type: str, default: present, choices: [present, absent], description: "absent deletes the group and its mail; fails while an account is still a member."}
+          aliases: {type: list, elements: str, description: "Further addresses of the group."}
+          description: {type: str, description: "Free text."}
+      stalwart_collections:
+        type: list
+        elements: dict
+        default: []
+        description: Folders, calendars and address books of accounts and groups and who they are shared with.
+        options:
+          owner: {type: str, required: true, description: "Address of the account or group that owns the collection."}
+          kind: {type: str, required: true, choices: [folder, calendar, addressbook], description: "What it is."}
+          name: {type: str, required: true, description: "Name; a folder path uses /."}
+          state: {type: str, default: present, choices: [present, absent], description: "absent deletes the collection."}
+          share_with: {type: dict, description: "Address (account or group) to the list of JMAP rights; replaces the sharing list; {} removes all; left out keeps it."}
+          remove_content: {type: bool, default: false, description: "absent only: delete the mail, events or contacts inside as well."}
       stalwart_lists:
         type: list
         elements: dict

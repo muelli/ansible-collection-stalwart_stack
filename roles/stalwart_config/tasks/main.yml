@@ -13,6 +13,14 @@
       {%- set out = [] -%}
       {%- for d in stalwart_lists -%}{%- set _ = out.append({'state': 'present'} | combine(d)) -%}{%- endfor -%}
       {{ out }}
+    stalwart_groups_norm: >-
+      {%- set out = [] -%}
+      {%- for d in stalwart_groups -%}{%- set _ = out.append({'state': 'present'} | combine(d)) -%}{%- endfor -%}
+      {{ out }}
+    stalwart_collections_norm: >-
+      {%- set out = [] -%}
+      {%- for d in stalwart_collections -%}{%- set _ = out.append({'state': 'present'} | combine(d)) -%}{%- endfor -%}
+      {{ out }}
 
 - name: Check required variables
   ansible.builtin.assert:
@@ -63,12 +71,16 @@
       {%- set out = [] -%}
       {%- for e in stalwart_lists_norm | selectattr('state', 'equalto', 'absent') -%}{%- set _ = out.append({'address': e.name ~ '@' ~ e.domain}) -%}{%- endfor -%}
       {{ out }}
+    stalwart_absent_groups: >-
+      {%- set out = [] -%}
+      {%- for e in stalwart_groups_norm | selectattr('state', 'equalto', 'absent') -%}{%- set _ = out.append({'address': e.name ~ '@' ~ e.domain}) -%}{%- endfor -%}
+      {{ out }}
 
-- name: Remove accounts and mailing lists that are marked absent
+- name: Remove accounts, groups and mailing lists that are marked absent
   ansible.builtin.include_tasks: absent_addresses.yml
   when:
     - stalwart_sentinel.stat.exists
-    - (stalwart_absent_accounts + stalwart_absent_lists) | length > 0
+    - (stalwart_absent_accounts + stalwart_absent_lists + stalwart_absent_groups) | length > 0
 
 - name: Look up the server ids of domains that are to be removed
   ansible.builtin.command:
@@ -310,6 +322,14 @@
           Hint: accounts, lists or aliases refer to domain(s) {{ refs.l | unique | reject('in', present_domains) | list | join(', ') }} that are not present entries of stalwart_domains.
           Add the domain, or mark the entries that use it `state: absent` (also when the domain itself is being removed).
           {% endif %}
+          {% if (((stalwart_apply_mgmt.stderr | default('')) ~ (ansible_failed_result.stderr | default(''))) is search('unresolved id|Id reference .* not found|memberGroupIds')) %}
+          {% set group_addrs = stalwart_groups_norm | selectattr('state', 'equalto', 'present') | map(attribute='name') | zip(stalwart_groups_norm | selectattr('state', 'equalto', 'present') | map(attribute='domain')) | map('join', '@') | list %}
+          {% set used = namespace(l=[]) %}
+          {% for e in stalwart_accounts_norm if e.state == 'present' %}{% set used.l = used.l + (e.groups | default([])) %}{% endfor %}
+          {% if used.l | unique | reject('in', group_addrs) | list | length > 0 %}
+          Hint: accounts list the group(s) {{ used.l | unique | reject('in', group_addrs) | list | join(', ') }} in `groups`, which are not present entries of stalwart_groups.
+          {% endif %}
+          {% endif %}
           {% if stalwart_recovery_log.stdout is search('prior to 1\\.0|Unsupported database schema') %}
           Cause: {{ stalwart_data_dir | default('/var/lib/stalwart') }} holds a data store written by a 0.x Stalwart, which 1.x cannot open.
           Stop the service and move that directory away (for example mv {{ stalwart_data_dir | default('/var/lib/stalwart') }} {{ stalwart_data_dir | default('/var/lib/stalwart') }}-0x), then run again.
@@ -356,6 +376,10 @@
 - name: Install or remove the Sieve forwards of accounts
   ansible.builtin.include_tasks: forwards.yml
   when: stalwart_accounts_norm | rejectattr('state', 'equalto', 'absent') | selectattr('forward_to', 'defined') | list | length > 0
+
+- name: Manage folders, calendars and address books and who they are shared with
+  ansible.builtin.include_tasks: collections.yml
+  when: stalwart_collections_norm | length > 0
 
 # Stalwart lists the DNS records it wants for a domain, among them one CNAME per
 # subdomain that clients fetch over HTTPS (mta-sts, autoconfig, ...). Caddy has

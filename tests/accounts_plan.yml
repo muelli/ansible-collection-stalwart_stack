@@ -17,10 +17,13 @@
           - {name: example.org, state: present}
           - {name: other.example, state: present, catch_all: team@example.org}
         stalwart_accounts:
-          - {name: alice, domain: example.org, description: Alice, aliases: [ebay@example.org, shop@other.example]}
+          - {name: alice, domain: example.org, description: Alice, aliases: [ebay@example.org, shop@other.example], groups: [support@example.org]}
           - {name: bob, domain: example.org, forward_to: bob@elsewhere.example}
           - {name: gone, domain: example.org, state: absent}
           - {name: noalias, domain: example.org}
+        stalwart_groups:
+          - {name: support, domain: example.org, description: Support, aliases: [help@other.example]}
+          - {name: oldteam, domain: example.org, state: absent}
         stalwart_lists:
           - {name: team, domain: example.org, recipients: [alice@example.org, x@elsewhere.example], aliases: [crew@other.example]}
           - {name: old, domain: example.org, state: absent}
@@ -30,11 +33,27 @@
           {{ lookup('ansible.builtin.template', '../roles/stalwart_config/templates/plan.ndjson.j2').splitlines() | map('from_json') | list }}
     - name: Pick accounts and lists
       ansible.builtin.set_fact:
-        accounts: "{{ (ops | selectattr('object', 'equalto', 'Account') | list) }}"
+        group_ops: >-
+          {%- set out = [] -%}
+          {%- for x in ops if x.object == 'Account' and (x.value.keys() | list)[0].startswith('group-') -%}{%- set _ = out.append(x) -%}{%- endfor -%}
+          {{ out }}
+        accounts: >-
+          {%- set out = [] -%}
+          {%- for x in ops if x.object == 'Account' and (x.value.keys() | list)[0].startswith('account-') -%}{%- set _ = out.append(x) -%}{%- endfor -%}
+          {{ out }}
         lists: "{{ (ops | selectattr('object', 'equalto', 'MailingList') | list) }}"
     - name: Check them
       ansible.builtin.assert:
         that:
+          # (`groups` is Ansible's own variable, hence group_ops)
+          - group_ops | length == 1
+          - "group_ops[0].value['group-support-example-org'] == {'@type': 'Group', 'name': 'support', 'domainId': '#domain-example-org', 'description': 'Support', 'aliases': {'0': {'name': 'help', 'domainId': '#domain-other-example', 'enable': true}}}"
+          - group_ops[0].matchOn == ['name', 'domainId']
+          # groups come before the accounts that refer to them
+          - (ops | map(attribute='value') | map('dict2items') | flatten | map(attribute='key') | list).index('group-support-example-org')
+            < (ops | map(attribute='value') | map('dict2items') | flatten | map(attribute='key') | list).index('account-alice-example-org')
+          - "accounts[0].value['account-alice-example-org'].memberGroupIds == {'#group-support-example-org': true}"
+          - "'memberGroupIds' not in accounts[1].value['account-bob-example-org']"
           - accounts | length == 3
           - lists | length == 1
           - accounts | map(attribute='value') | map('dict2items') | flatten | map(attribute='key') | sort | list

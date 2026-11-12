@@ -125,9 +125,30 @@
     a domain outside stalwart_domains makes the apply fail and the failure names it. Entries marked
     absent are removed by tasks/absent_addresses.yml before the plan runs. No credentials are written:
     an update leaves the password of an existing account alone. -#}
+{#- Groups come first, so that accounts can reference them (`groups:`, Account.memberGroupIds). -#}
+{%- for grp in stalwart_groups if grp.state | default('present', true) == 'present' -%}
+{%-   set fields = {'@type': 'Group', 'name': grp.name, 'domainId': '#domain-' ~ (grp.domain | replace('.', '-'))} -%}
+{%-   if grp.description is defined -%}{%- set _ = fields.update({'description': grp.description}) -%}{%- endif -%}
+{%-   if grp.aliases is defined -%}
+{%-     set al = {} -%}
+{%-     for addr in grp.aliases -%}
+{%-       set _ = al.update({loop.index0 | string: {'name': addr.split('@')[0], 'domainId': '#domain-' ~ (addr.split('@')[1] | replace('.', '-')), 'enable': true}}) -%}
+{%-     endfor -%}
+{%-     set _ = fields.update({'aliases': al}) -%}
+{%-   endif -%}
+{%-   set ops.list = ops.list + [{
+        '@type': 'upsert', 'object': 'Account', 'matchOn': ['name', 'domainId'],
+        'value': {'group-' ~ (grp.name ~ '-' ~ grp.domain | replace('.', '-')): fields}}] -%}
+{%- endfor -%}
 {%- for acc in stalwart_accounts if acc.state | default('present', true) == 'present' -%}
 {%-   set fields = {'@type': 'User', 'name': acc.name, 'domainId': '#domain-' ~ (acc.domain | replace('.', '-'))} -%}
 {%-   if acc.description is defined -%}{%- set _ = fields.update({'description': acc.description}) -%}{%- endif -%}
+{#-   Without `groups` the memberships are left alone; [] removes them all. -#}
+{%-   if acc.groups is defined -%}
+{%-     set mg = {} -%}
+{%-     for g in acc.groups -%}{%- set _ = mg.update({'#group-' ~ (g.split('@')[0] ~ '-' ~ g.split('@')[1] | replace('.', '-')): true}) -%}{%- endfor -%}
+{%-     set _ = fields.update({'memberGroupIds': mg}) -%}
+{%-   endif -%}
 {#-   Without `aliases` the account's aliases are left alone; [] removes them all. -#}
 {%-   if acc.aliases is defined -%}
 {%-     set al = {} -%}

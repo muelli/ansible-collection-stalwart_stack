@@ -20,10 +20,14 @@ stalwart_domains:
 
 # Accounts without credentials (set passwords yourself), their aliases, a Sieve forward,
 # and a mailing list. See the README, "Accounts, aliases, forwards and lists".
+stalwart_groups:                    # a shared mailbox, calendar and address book: support@
+  - name: support
+    domain: mail.example.org
 stalwart_accounts:
   - name: alice
     domain: mail.example.org
     aliases: [shop@mail.example.org]
+    groups: [support@mail.example.org]
   - name: forwarder
     domain: mail.example.org
     forward_to: alice@elsewhere.example
@@ -31,6 +35,13 @@ stalwart_lists:
   - name: team
     domain: mail.example.org
     recipients: [alice@mail.example.org, bob@elsewhere.example]
+# Folders, calendars and address books and who they are shared with.
+stalwart_collections:
+  - owner: alice@mail.example.org
+    kind: folder
+    name: Projects/Alpha
+    share_with:
+      forwarder@mail.example.org: [mayReadItems, maySetSeen]
 
 # Other sites. `user:` forwards to that user's own Caddy.
 caddy_domains:

@@ -1,0 +1,34 @@
+---
+# Folders (mail), calendars and address books of accounts and groups, and who they are
+# shared with (`stalwart_collections`). Runs after the plan, because the owners have to
+# exist; everything is done as the administrator over JMAP, so no password of the owner
+# is involved. Nothing is checked beforehand: an unknown address or a right Stalwart
+# does not know fails in the module with the server's own message.
+- name: Wait for the management listener
+  ansible.builtin.wait_for:
+    host: "{{ stalwart_mgmt_bind.rsplit(':', 1)[0] }}"
+    port: "{{ stalwart_mgmt_bind.rsplit(':', 1)[1] | int }}"
+    timeout: 60
+
+- name: Look up what the server has
+  ansible.builtin.include_tasks: list_ids.yml
+
+- name: Manage each folder, calendar and address book
+  stalwart_collection:
+    url: "{{ stalwart_mgmt_url }}"
+    user: "{{ stalwart_admin_user }}"
+    password: "{{ stalwart_admin_password }}"
+    owner: "{{ item.owner }}"
+    principal_ids: "{{ stalwart_account_ids }}"
+    kind: "{{ item.kind }}"
+    name: "{{ item.name }}"
+    state: "{{ item.state }}"
+    share_with: "{{ item.share_with | default(omit) }}"
+    remove_content: "{{ item.remove_content | default(false) }}"
+  # An owner that is itself being removed takes its collections along.
+  loop: >-
+    {{ stalwart_collections_norm
+       | rejectattr('owner', 'in', (stalwart_absent_accounts + stalwart_absent_groups) | map(attribute='address') | list)
+       | list }}
+  loop_control:
+    label: "{{ item.kind }} {{ item.name }} of {{ item.owner }}"

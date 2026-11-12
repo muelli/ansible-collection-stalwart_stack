@@ -20,6 +20,7 @@
     label: "{{ item.object }}"
   register: stalwart_listing
   changed_when: false
+  check_mode: false   # only reads, and --check needs the answer for the modules that follow
 
 - name: Index them by address
   ansible.builtin.set_fact:
