@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Breaking: the rules of `sender_domain_routing` use `sender` instead of `domain`.
+  `user@example.org` routes one envelope sender, `@example.org` a whole domain (as in
+  Postfix's `sender_dependent_relayhost_maps`); address rules are tried before domain
+  rules whatever their order. A `sender` that is neither fails the play. Change
+  `domain: example.org` to `sender: '@example.org'`.
+
 - `stalwart_accounts` and `stalwart_lists` manage Stalwart accounts (name, domain,
   description, aliases, no credentials) and mailing lists, with `state: absent` to
   delete them (before the domains, so a domain can go in the same run). An account

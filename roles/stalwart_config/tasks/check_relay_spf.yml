@@ -4,6 +4,17 @@
 # as the envelope sender. A relay with `manages_spf: true` uses its own
 # return-path domain (SMTP2GO, for example), so SPF of the sender domain is not
 # consulted and the automatic record does no harm.
+- name: A routing sender is an address or @domain
+  ansible.builtin.assert:
+    that: "item.sender.count('@') == 1 and item.sender | length > 1"
+    fail_msg: >-
+      sender_domain_routing: '{{ item.sender }}' is neither an address (user@example.org) nor a
+      domain (@example.org, with the leading @).
+    quiet: true
+  loop: "{{ sender_domain_routing | default([]) }}"
+  loop_control:
+    label: "{{ item.sender }}"
+
 - name: Reject relay and routing combinations that break SPF
   ansible.builtin.fail:
     msg: >-
@@ -21,4 +32,4 @@
   when:
     - item.state | default('present', true) == 'present'
     - item.dns is defined
-    - item.name in (_active_rules | rejectattr('route', 'in', _relays_with_own_spf) | map(attribute='domain') | list)
+    - item.name in (_active_rules | rejectattr('route', 'in', _relays_with_own_spf) | map(attribute='sender') | map('regex_replace', '^.*@', '') | list)

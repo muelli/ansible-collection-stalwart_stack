@@ -173,9 +173,14 @@
 {#- Stage 6: sender-domain based outbound routing -#}
 {%- set match = {'0': {'if': 'is_local_domain(rcpt_domain)', 'then': "'local'"}} -%}
 {%- set idx = namespace(n=1) -%}
-{%- for rule in sender_domain_routing if rule.state | default('present', true) == 'present' -%}
-{%-   set _ = match.update({idx.n | string: {'if': "sender_domain == '" ~ rule.domain ~ "'", 'then': "'" ~ rule.route ~ "'"}}) -%}
-{%-   set idx.n = idx.n + 1 -%}
+{#- `user@host` compares the whole sender, `@host` its domain; addresses go first. -#}
+{%- set active_rules = sender_domain_routing | selectattr('state', 'undefined') | list + sender_domain_routing | selectattr('state', 'defined') | selectattr('state', 'equalto', 'present') | list -%}
+{%- for want_domain in [false, true] -%}
+{%-   for rule in active_rules if rule.sender.startswith('@') == want_domain -%}
+{%-     set cond = ("sender_domain == '" ~ rule.sender[1:] ~ "'") if want_domain else ("sender == '" ~ rule.sender ~ "'") -%}
+{%-     set _ = match.update({idx.n | string: {'if': cond, 'then': "'" ~ rule.route ~ "'"}}) -%}
+{%-     set idx.n = idx.n + 1 -%}
+{%-   endfor -%}
 {%- endfor -%}
 {%- set ops.list = ops.list + [{'@type': 'update', 'object': 'MtaOutboundStrategy', 'id': 'singleton', 'value': {'route': {'match': match, 'else': "'mx'"}}}] -%}
 

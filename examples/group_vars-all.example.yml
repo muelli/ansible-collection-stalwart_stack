@@ -75,5 +75,7 @@ stalwart_relay_hosts:
     auth_secret: "{{ vault_relay_secret }}"
 
 sender_domain_routing:
-  - domain: bar.example
+  - sender: '@bar.example'          # every address of the domain
+    route: examplerelay
+  - sender: alice@foo.example       # one address; wins over a domain rule
     route: examplerelay

@@ -64,6 +64,8 @@ on x86_64 or aarch64 with systemd.
 * The Stalwart unit conflicts with `postfix`, `sendmail` and `exim4`.
 * The plan contains DNS and relay secrets; it is written `0600` and hidden from
   Ansible output. The fallback admin password (>= 12 characters) is required.
+* `sender_domain_routing` rules match `sender: user@example.org` or `sender: '@example.org'`
+  (a whole domain); addresses win over domains.
 * Domains with a relay in `sender_domain_routing` must not set `dns:`;
   automatic DNS would overwrite their SPF record. The role fails on that, unless
   the relay has `manages_spf: true` (it sends with its own return-path domain,

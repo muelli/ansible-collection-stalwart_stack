@@ -70,9 +70,9 @@ argument_specs:
         type: list
         elements: dict
         default: []
-        description: Which sender domain goes through which relay; the first match wins.
+        description: Which sender (an address, or @domain for a whole domain) goes through which relay; addresses win over domains.
         options:
-          domain: {type: str, required: true, description: "Domain mail is sent from."}
+          sender: {type: str, required: true, description: "Envelope sender: user@example.org for one address, @example.org for every address of a domain."}
           route: {type: str, required: true, description: "name of an entry of stalwart_relay_hosts."}
           state: {type: str, default: present, choices: [present, absent], description: "absent drops the rule."}
       stalwart_applications:

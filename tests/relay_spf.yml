@@ -17,7 +17,7 @@
         - name: Run the check
           ansible.builtin.include_tasks: ../roles/stalwart_config/tasks/check_relay_spf.yml
           vars:
-            sender_domain_routing: [{domain: a.example, route: own}]
+            sender_domain_routing: [{sender: 'x@a.example', route: own}]
         - name: The check did not fail
           ansible.builtin.set_fact: {plain_rejected: false}
       rescue:
@@ -26,11 +26,11 @@
     - name: Domain with dns routed through a relay with its own SPF passes
       ansible.builtin.include_tasks: ../roles/stalwart_config/tasks/check_relay_spf.yml
       vars:
-        sender_domain_routing: [{domain: b.example, route: theirs, state: present}]
+        sender_domain_routing: [{sender: '@b.example', route: theirs, state: present}]
     - name: Domain without dns passes whatever relay
       ansible.builtin.include_tasks: ../roles/stalwart_config/tasks/check_relay_spf.yml
       vars:
-        sender_domain_routing: [{domain: c.example, route: own}]
+        sender_domain_routing: [{sender: '@c.example', route: own}]
     - name: Only the plain relay was rejected
       ansible.builtin.assert:
         that: plain_rejected

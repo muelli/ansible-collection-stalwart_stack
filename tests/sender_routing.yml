@@ -1,0 +1,55 @@
+---
+# Offline check of the outbound route expression built from sender_domain_routing
+# (run by tests/run.sh; no host needed): `user@host` compares the whole sender, `@host`
+# the sender domain, addresses are tried first, absent rules are dropped, and a sender
+# that is neither is refused.
+- name: Render the plan for sender routing
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  vars_files:
+    - ../roles/stalwart_config/defaults/main.yml
+  tasks:
+    # set_fact, because vars_files (the role defaults) outrank play vars.
+    - name: Test inputs
+      ansible.builtin.set_fact:
+        stalwart_hostname: mail.example.org
+        stalwart_domains: [{name: example.org, state: present}]
+        sender_domain_routing:
+          - {sender: '@dom.example', route: dom}
+          - {sender: 'me@dom.example', route: one}
+          - {sender: '@gone.example', route: gone, state: absent}
+          - {sender: 'you@other.example', route: two, state: present}
+    - name: Render
+      ansible.builtin.set_fact:
+        ops: >-
+          {{ lookup('ansible.builtin.template', '../roles/stalwart_config/templates/plan.ndjson.j2').splitlines() | map('from_json') | list }}
+    - name: Pick the route expression
+      ansible.builtin.set_fact:
+        route: "{{ (ops | selectattr('object', 'equalto', 'MtaOutboundStrategy') | first).value.route }}"
+    - name: Check it
+      ansible.builtin.assert:
+        that:
+          - route.match['0'].if == 'is_local_domain(rcpt_domain)'
+          - "route.match['1'] == {'if': \"sender == 'me@dom.example'\", 'then': \"'one'\"}"
+          - "route.match['2'] == {'if': \"sender == 'you@other.example'\", 'then': \"'two'\"}"
+          - "route.match['3'] == {'if': \"sender_domain == 'dom.example'\", 'then': \"'dom'\"}"
+          - route.match | length == 4
+          - route['else'] == "'mx'"
+        quiet: true
+    - name: A sender without @ is refused
+      block:
+        - name: Run the check
+          ansible.builtin.include_tasks: ../roles/stalwart_config/tasks/check_relay_spf.yml
+          vars:
+            stalwart_relay_hosts: []
+            sender_domain_routing: [{sender: bar.example, route: own}]
+        - name: The check did not fail
+          ansible.builtin.set_fact: {bare_rejected: false}
+      rescue:
+        - name: The check failed as expected
+          ansible.builtin.set_fact: {bare_rejected: true}
+    - name: Only the bare name was refused
+      ansible.builtin.assert:
+        that: bare_rejected
+        quiet: true

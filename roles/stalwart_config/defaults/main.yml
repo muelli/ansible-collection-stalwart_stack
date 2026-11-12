@@ -113,14 +113,18 @@ stalwart_relay_hosts: []
 #     auto_update_interval: 7776000000
 stalwart_applications: []
 
-# Which sender domain is sent through which relay. The envelope sender domain
-# is compared, the first matching rule wins, mail for local recipients always
-# stays local, and everything else is delivered directly by MX lookup. Without
-# a matching rule there is no relay.
-#   - domain: bar.example           # domain mail is sent from
+# Which sender is sent through which relay. The envelope sender is compared;
+# `user@host` matches that address, `@host` every address of the domain (as in
+# Postfix's sender_dependent_relayhost_maps). Address rules are tried before
+# domain rules whatever their order here, otherwise the first match wins. Mail
+# for local recipients always stays local, and everything else is delivered
+# directly by MX lookup. Without a matching rule there is no relay.
+#   - sender: tobias@foo.example    # one address ...
 #     route: examplerelay           # `name` of an entry of stalwart_relay_hosts
+#   - sender: '@bar.example'        # ... or a whole domain (quote it in YAML)
+#     route: otherrelay
 #     state: present                # default; absent drops the rule
-# Notes: such a domain must not set `dns:` in stalwart_domains, because the
+# Notes: the domain of such a sender must not set `dns:` in stalwart_domains, because the
 # automatic DNS records would overwrite its SPF record. Publish SPF yourself and
 # include what the relay provider asks for (for example
 # `v=spf1 mx include:spf.relay.example.net -all`). Exception: with
