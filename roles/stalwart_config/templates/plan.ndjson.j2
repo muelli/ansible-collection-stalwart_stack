@@ -132,7 +132,10 @@
 {%-   if grp.aliases is defined -%}
 {%-     set al = {} -%}
 {%-     for addr in grp.aliases -%}
-{%-       set _ = al.update({loop.index0 | string: {'name': addr.split('@')[0], 'domainId': '#domain-' ~ (addr.split('@')[1] | replace('.', '-')), 'enable': true}}) -%}
+{#-       An alias is an address, or {address: ..., enabled: false} to keep it but make it refuse mail. -#}
+{%-       set _addr = addr if addr is string else addr.address -%}
+{%-       set _on = true if addr is string else (addr.enabled | default(true) | bool) -%}
+{%-       set _ = al.update({loop.index0 | string: {'name': _addr.split('@')[0], 'domainId': '#domain-' ~ (_addr.split('@')[1] | replace('.', '-')), 'enable': _on}}) -%}
 {%-     endfor -%}
 {%-     set _ = fields.update({'aliases': al}) -%}
 {%-   endif -%}
@@ -153,7 +156,10 @@
 {%-   if acc.aliases is defined -%}
 {%-     set al = {} -%}
 {%-     for addr in acc.aliases -%}
-{%-       set _ = al.update({loop.index0 | string: {'name': addr.split('@')[0], 'domainId': '#domain-' ~ (addr.split('@')[1] | replace('.', '-')), 'enable': true}}) -%}
+{#-       An alias is an address, or {address: ..., enabled: false} to keep it but make it refuse mail. -#}
+{%-       set _addr = addr if addr is string else addr.address -%}
+{%-       set _on = true if addr is string else (addr.enabled | default(true) | bool) -%}
+{%-       set _ = al.update({loop.index0 | string: {'name': _addr.split('@')[0], 'domainId': '#domain-' ~ (_addr.split('@')[1] | replace('.', '-')), 'enable': _on}}) -%}
 {%-     endfor -%}
 {%-     set _ = fields.update({'aliases': al}) -%}
 {%-   endif -%}
@@ -169,7 +175,10 @@
 {%-   if lst.aliases is defined -%}
 {%-     set al = {} -%}
 {%-     for addr in lst.aliases -%}
-{%-       set _ = al.update({loop.index0 | string: {'name': addr.split('@')[0], 'domainId': '#domain-' ~ (addr.split('@')[1] | replace('.', '-')), 'enable': true}}) -%}
+{#-       An alias is an address, or {address: ..., enabled: false} to keep it but make it refuse mail. -#}
+{%-       set _addr = addr if addr is string else addr.address -%}
+{%-       set _on = true if addr is string else (addr.enabled | default(true) | bool) -%}
+{%-       set _ = al.update({loop.index0 | string: {'name': _addr.split('@')[0], 'domainId': '#domain-' ~ (_addr.split('@')[1] | replace('.', '-')), 'enable': _on}}) -%}
 {%-     endfor -%}
 {%-     set _ = fields.update({'aliases': al}) -%}
 {%-   endif -%}
@@ -177,6 +186,36 @@
         '@type': 'upsert', 'object': 'MailingList', 'matchOn': ['name', 'domainId'],
         'value': {'list-' ~ (lst.name ~ '-' ~ lst.domain | replace('.', '-')): fields}}] -%}
 {%- endfor -%}
+
+{#- Stage 4c: what to do with mail to certain recipient addresses (stalwart_recipient_policies).
+    One key-value entry per address maps it to a spam tag, one `Email` spam rule looks every address of
+    a message up and returns that tag, and the three tags decide the outcome: spam (score, so the message
+    goes to Junk), discard (accepted and dropped) or reject (refused after DATA). Entries marked absent
+    are deleted by id in tasks/policies.yml, because a lookup entry can only be filtered by namespace.
+    The rule is named in capitals because that is how Stalwart stores rule names. -#}
+{%- set pol_present = stalwart_recipient_policies | selectattr('state', 'undefined') | list
+                      + stalwart_recipient_policies | selectattr('state', 'defined') | selectattr('state', 'equalto', 'present') | list -%}
+{%- set pol_tags = {'spam': 'RCPT_SPAM', 'discard': 'RCPT_DISCARD', 'reject': 'RCPT_REJECT'} -%}
+{#- The rule and tags are written whenever the variable is used at all, and the rule is switched off
+    once no present entry is left, so removing the last policy leaves nothing active behind. -#}
+{%- if stalwart_recipient_policies | length > 0 -%}
+{%-   for p in pol_present -%}
+{%-     set _ = ops.list.append({
+          '@type': 'upsert', 'object': 'MemoryLookupKeyValue', 'matchOn': ['namespace', 'key'],
+          'value': {'policy-' ~ loop.index0: {
+            'namespace': stalwart_recipient_policy_namespace, 'key': p.address | lower,
+            'value': pol_tags[p.action], 'isGlobPattern': ('*' in p.address or '?' in p.address)}}}) -%}
+{%-   endfor -%}
+{%-   set _ = ops.list.append({'@type': 'upsert', 'object': 'SpamTag', 'matchOn': ['tag'],
+          'value': {'policy-tag-spam': {'@type': 'Score', 'tag': 'RCPT_SPAM', 'score': stalwart_recipient_policy_spam_score}}}) -%}
+{%-   set _ = ops.list.append({'@type': 'upsert', 'object': 'SpamTag', 'matchOn': ['tag'],
+          'value': {'policy-tag-discard': {'@type': 'Discard', 'tag': 'RCPT_DISCARD'}}}) -%}
+{%-   set _ = ops.list.append({'@type': 'upsert', 'object': 'SpamTag', 'matchOn': ['tag'],
+          'value': {'policy-tag-reject': {'@type': 'Reject', 'tag': 'RCPT_REJECT'}}}) -%}
+{%-   set _ = ops.list.append({'@type': 'upsert', 'object': 'SpamRule', 'matchOn': ['name'],
+          'value': {'policy-rule': {'@type': 'Email', 'name': 'RCPT-POLICY', 'enable': (pol_present | length > 0), 'priority': 100,
+            'condition': {'else': "key_get('" ~ stalwart_recipient_policy_namespace ~ "', email)"}}}}) -%}
+{%- endif -%}
 
 {#- Stage 5: system settings -#}
 {%- set trusted = {} -%}

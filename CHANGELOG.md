@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- `stalwart_recipient_policies` decides per recipient address (or glob) whether mail is filed as
+  junk (`spam`), accepted and dropped (`discard`) or refused after DATA (`reject`), for explicit
+  aliases and for addresses a catch-all accepts. It is built from a lookup list, an `Email`-variant
+  spam rule (`RCPT-POLICY`) and three spam tags; entries accept `state: absent`. The whole message
+  gets the verdict, so a mail to a listed and an unlisted address is affected for both.
+- Aliases of accounts, groups and lists may be written `{address: ..., enabled: false}`: the
+  alias stays but Stalwart refuses mail to it at RCPT TO.
+
 - `stalwart_groups` manage Stalwart group accounts (a shared mailbox, calendar and address
   book with its own address); accounts join them with `groups`. `stalwart_collections` manage
   folders, calendars and address books of accounts and groups and who they are shared with

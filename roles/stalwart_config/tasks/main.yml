@@ -316,8 +316,9 @@
           {% if (((stalwart_apply_mgmt.stderr | default('')) ~ (ansible_failed_result.stderr | default(''))) is search('unresolved id|Id reference .* not found')) %}
           {% set present_domains = stalwart_domains | selectattr('state', 'equalto', 'present') | map(attribute='name') | list %}
           {% set refs = namespace(l=[]) %}
-          {% for e in stalwart_accounts_norm + stalwart_lists_norm if e.state == 'present' %}
-          {% set refs.l = refs.l + [e.domain] + (e.aliases | default([]) | map('regex_replace', '^.*@', '') | list) %}
+          {% for e in stalwart_accounts_norm + stalwart_lists_norm + stalwart_groups_norm if e.state == 'present' %}
+          {% set refs.l = refs.l + [e.domain] %}
+          {% for a in e.aliases | default([]) %}{% set refs.l = refs.l + [(a if a is string else a.address).split('@')[1]] %}{% endfor %}
           {% endfor %}
           Hint: accounts, lists or aliases refer to domain(s) {{ refs.l | unique | reject('in', present_domains) | list | join(', ') }} that are not present entries of stalwart_domains.
           Add the domain, or mark the entries that use it `state: absent` (also when the domain itself is being removed).
@@ -376,6 +377,10 @@
 - name: Install or remove the Sieve forwards of accounts
   ansible.builtin.include_tasks: forwards.yml
   when: stalwart_accounts_norm | rejectattr('state', 'equalto', 'absent') | selectattr('forward_to', 'defined') | list | length > 0
+
+- name: Recipient policies - remove absent entries and reload the lookup lists
+  ansible.builtin.include_tasks: policies.yml
+  when: stalwart_recipient_policies | length > 0
 
 - name: Manage folders, calendars and address books and who they are shared with
   ansible.builtin.include_tasks: collections.yml

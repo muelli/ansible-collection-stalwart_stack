@@ -39,6 +39,7 @@ stalwart_domains: []
 #     aliases:                      # optional; full addresses on any domain of stalwart_domains.
 #       - ebay@example.org          # The role owns the list: other aliases are removed. Left out
 #       - shop@other.example        # keeps the server's aliases, [] removes them all.
+#       - {address: old@example.org, enabled: false}   # kept, but refuses mail (550 at RCPT TO)
 #     forward_to: me@elsewhere.org  # optional; a Sieve script `stalwart-forward` redirects every
 #                                   # message to this one address. The envelope sender becomes the
 #                                   # account's own address, which keeps SPF at the receiver
@@ -101,6 +102,25 @@ stalwart_collections: []
 # A whole-domain catch-all that forwards is a list plus `catch_all:` of the domain
 # pointing at it (catch_all: team@example.org).
 stalwart_lists: []
+
+# What to do with mail to certain recipient addresses, for example the one address you gave
+# one correspondent that now receives spam. Works for explicit aliases and for addresses a
+# catch-all accepts. Entries are key-value entries of a lookup list, `RCPT-POLICY` is one spam
+# rule of the `Email` variant that looks up every address of a message, and three spam tags
+# carry out the action.
+#   - address: ebay@example.org     # lowercase; a glob with * or ? matches many ('block-*@example.org')
+#     action: spam                  # spam    deliver to Junk (a score of stalwart_recipient_policy_spam_score)
+#                                   # discard accept and silently drop (the sender sees success)
+#                                   # reject  refuse after DATA with 550 (the sender sees an error)
+#     state: present                # default; absent deletes the entry
+# Limits, measured on Stalwart 1.1.0: the verdict is for the whole message, so a mail to a listed
+# and an unlisted address is rejected or discarded for BOTH; the rule looks at every address of the
+# message (headers as well as envelope), so a listed address in From:/Cc: counts too; reject comes
+# after DATA, not at RCPT TO. To refuse at RCPT TO instead, set an explicit alias to
+# {address: ..., enabled: false} (see `aliases` above).
+stalwart_recipient_policies: []
+stalwart_recipient_policy_namespace: rcpt-policy
+stalwart_recipient_policy_spam_score: 20
 
 # Where `/` on the Stalwart host name redirects to (Http.redirectRoot). "" leaves
 # Stalwart's setting alone, which is /account.

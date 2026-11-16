@@ -1,0 +1,108 @@
+---
+# Offline check of how stalwart_recipient_policies and alias dicts end up in the plan
+# (run by tests/run.sh; no host needed).
+- name: Render the plan with recipient policies
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  vars_files:
+    - ../roles/stalwart_config/defaults/main.yml
+  tasks:
+    # set_fact, because vars_files (the role defaults) outrank play vars.
+    - name: Test inputs
+      ansible.builtin.set_fact:
+        stalwart_hostname: mail.example.org
+        stalwart_domains:
+          - {name: example.org, state: present}
+        stalwart_accounts:
+          - name: alice
+            domain: example.org
+            aliases:
+              - shop@example.org
+              - {address: old@example.org, enabled: false}
+              - {address: kept@example.org}
+        stalwart_recipient_policies:
+          - {address: eBay@example.org, action: spam}
+          - {address: 'block-*@example.org', action: discard, state: present}
+          - {address: spamtrap@example.org, action: reject}
+          - {address: gone@example.org, state: absent}
+    - name: Render
+      ansible.builtin.set_fact:
+        ops: >-
+          {{ lookup('ansible.builtin.template', '../roles/stalwart_config/templates/plan.ndjson.j2').splitlines() | map('from_json') | list }}
+    - name: Pick the pieces
+      ansible.builtin.set_fact:
+        entries: "{{ ops | selectattr('object', 'equalto', 'MemoryLookupKeyValue') | map(attribute='value') | map('dict2items') | flatten | map(attribute='value') | list }}"
+        tags: "{{ ops | selectattr('object', 'equalto', 'SpamTag') | map(attribute='value') | map('dict2items') | flatten | map(attribute='value') | list }}"
+        rules: "{{ ops | selectattr('object', 'equalto', 'SpamRule') | list }}"
+        account: "{{ (ops | selectattr('object', 'equalto', 'Account') | first).value['account-alice-example-org'] }}"
+    - name: Check them
+      ansible.builtin.assert:
+        that:
+          # addresses are lowercased, the absent one is left out, globs are marked
+          - entries | length == 3
+          - "{'namespace': 'rcpt-policy', 'key': 'ebay@example.org', 'value': 'RCPT_SPAM', 'isGlobPattern': false} in entries"
+          - "{'namespace': 'rcpt-policy', 'key': 'block-*@example.org', 'value': 'RCPT_DISCARD', 'isGlobPattern': true} in entries"
+          - "{'namespace': 'rcpt-policy', 'key': 'spamtrap@example.org', 'value': 'RCPT_REJECT', 'isGlobPattern': false} in entries"
+          - ops | selectattr('object', 'equalto', 'MemoryLookupKeyValue') | map(attribute='matchOn') | first == ['namespace', 'key']
+          # the three tags
+          - "{'@type': 'Score', 'tag': 'RCPT_SPAM', 'score': 20} in tags"
+          - "{'@type': 'Discard', 'tag': 'RCPT_DISCARD'} in tags"
+          - "{'@type': 'Reject', 'tag': 'RCPT_REJECT'} in tags"
+          - tags | length == 3
+          # one Email rule, named in capitals, that returns the tag stored for the address
+          - rules | length == 1
+          - rules[0].matchOn == ['name']
+          - "rules[0].value['policy-rule'] == {'@type': 'Email', 'name': 'RCPT-POLICY', 'enable': true, 'priority': 100, 'condition': {'else': \"key_get('rcpt-policy', email)\"}}"
+          # aliases: strings stay enabled, a dict can switch one off
+          - "account.aliases['0'] == {'name': 'shop', 'domainId': '#domain-example-org', 'enable': true}"
+          - "account.aliases['1'] == {'name': 'old', 'domainId': '#domain-example-org', 'enable': false}"
+          - "account.aliases['2'].enable == true"
+        quiet: true
+
+- name: Without policies nothing about them is in the plan
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  vars_files:
+    - ../roles/stalwart_config/defaults/main.yml
+  tasks:
+    - name: Test inputs
+      ansible.builtin.set_fact:
+        stalwart_hostname: mail.example.org
+        stalwart_domains: [{name: example.org, state: present}]
+        # facts of the first play outlive it for the same host, so reset what it set
+        stalwart_recipient_policies: []
+        stalwart_accounts: []
+    - name: Render
+      ansible.builtin.set_fact:
+        ops: >-
+          {{ lookup('ansible.builtin.template', '../roles/stalwart_config/templates/plan.ndjson.j2').splitlines() | map('from_json') | list }}
+    - name: No spam, tag or lookup objects
+      ansible.builtin.assert:
+        that: ops | selectattr('object', 'in', ['MemoryLookupKeyValue', 'SpamTag', 'SpamRule']) | list | length == 0
+        quiet: true
+
+- name: With only absent policies the rule is switched off
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  vars_files:
+    - ../roles/stalwart_config/defaults/main.yml
+  tasks:
+    - name: Test inputs
+      ansible.builtin.set_fact:
+        stalwart_hostname: mail.example.org
+        stalwart_domains: [{name: example.org, state: present}]
+        stalwart_accounts: []
+        stalwart_recipient_policies: [{address: gone@example.org, state: absent}]
+    - name: Render
+      ansible.builtin.set_fact:
+        ops: >-
+          {{ lookup('ansible.builtin.template', '../roles/stalwart_config/templates/plan.ndjson.j2').splitlines() | map('from_json') | list }}
+    - name: No entries, but the rule exists and is disabled
+      ansible.builtin.assert:
+        that:
+          - ops | selectattr('object', 'equalto', 'MemoryLookupKeyValue') | list | length == 0
+          - (ops | selectattr('object', 'equalto', 'SpamRule') | first).value['policy-rule'].enable == false
+        quiet: true

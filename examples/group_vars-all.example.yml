@@ -26,7 +26,9 @@ stalwart_groups:                    # a shared mailbox, calendar and address boo
 stalwart_accounts:
   - name: alice
     domain: mail.example.org
-    aliases: [shop@mail.example.org]
+    aliases:
+      - shop@mail.example.org
+      - {address: leaked@mail.example.org, enabled: false}   # kept, but refuses mail (550)
     groups: [support@mail.example.org]
   - name: forwarder
     domain: mail.example.org
@@ -35,6 +37,10 @@ stalwart_lists:
   - name: team
     domain: mail.example.org
     recipients: [alice@mail.example.org, bob@elsewhere.example]
+# What to do with mail to certain addresses: spam (Junk), discard (drop silently) or reject.
+stalwart_recipient_policies:
+  - {address: shop@mail.example.org, action: spam}
+  - {address: 'block-*@mail.example.org', action: discard}
 # Folders, calendars and address books and who they are shared with.
 stalwart_collections:
   - owner: alice@mail.example.org

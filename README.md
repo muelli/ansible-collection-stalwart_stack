@@ -297,6 +297,43 @@ What to know, all measured on Stalwart 1.1.0:
 * The IMAP ACL commands are not offered (`SETACL` and `GETACL` fail), but folders shared
   this way show up under `Shared Folders/<owner>/` and `MYRIGHTS` reports the rights.
 
+### Mail to certain addresses: switching off, spam, discard, reject
+
+With one address per correspondent you can tell who leaked yours, and switch that address off
+later. Two mechanisms, for two situations:
+
+* **An explicit alias that refuses mail.** Give the alias as `{address: ..., enabled: false}` in
+  `aliases` of an account, group or list. The address stays in the configuration but Stalwart
+  answers `550 5.1.1 Mailbox does not exist` at RCPT TO. This does nothing if a domain
+  `catch_all` accepts the address instead: the catch-all takes everything the aliases refuse.
+* **`stalwart_recipient_policies`**, for addresses that deliver (explicit aliases or a catch-all):
+
+  ```yaml
+  stalwart_recipient_policies:
+    - {address: ebay@example.org, action: spam}       # delivered to Junk
+    - {address: shop@example.org, action: discard}    # accepted, silently dropped
+    - {address: 'block-*@example.org', action: reject}  # refused after DATA with 550
+    - {address: old@example.org, state: absent}       # remove the entry
+  ```
+
+  The role writes one lookup entry per address (namespace `rcpt-policy`), one spam rule
+  (`RCPT-POLICY`, variant `Email`, which looks up every address of a message) and the three spam
+  tags `RCPT_SPAM`, `RCPT_DISCARD` and `RCPT_REJECT` that carry out the action. `*` and `?` in an
+  address make it a glob. Entries marked `absent` are deleted, and when no present entry is left
+  the rule is switched off.
+
+What to know, measured on Stalwart 1.1.0:
+
+* The verdict is for the **whole message**. A mail to a listed and an unlisted address is
+  rejected or discarded for both, and `spam` files it as junk for both.
+* The rule looks at **every address of the message**, headers as well as envelope, so a listed
+  address in `From:` or `Cc:` counts too.
+* `reject` happens after DATA, not at RCPT TO (an explicit disabled alias is the way to refuse
+  earlier). `discard` tells the sender the mail was queued.
+* Lookup lists are read after `ReloadLookupStores`, which the role runs for you.
+* The spam rule cannot see `rcpt`; `env_to` is a list. That is why the rule is of the `Email`
+  variant, which gets one address at a time as `email`.
+
 ### Routing mail through a relay by sender
 
 `sender_domain_routing` picks the relay of `stalwart_relay_hosts` for outgoing mail by the

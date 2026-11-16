@@ -1,0 +1,59 @@
+---
+# Recipient policies (`stalwart_recipient_policies`). The plan has written the entries, the
+# spam tags and the rule; this file deletes the entries marked `state: absent` (a lookup entry
+# can only be filtered by namespace, so by id) and makes the server read the lookup lists,
+# which `ReloadSettings` does not do.
+- name: Wait for the management listener
+  ansible.builtin.wait_for:
+    host: "{{ stalwart_mgmt_bind.rsplit(':', 1)[0] }}"
+    port: "{{ stalwart_mgmt_bind.rsplit(':', 1)[1] | int }}"
+    timeout: 60
+
+- name: Every present recipient policy needs a valid action
+  ansible.builtin.assert:
+    that: item.action | default('') in ['spam', 'discard', 'reject']
+    fail_msg: "stalwart_recipient_policies: '{{ item.address }}' needs action: spam, discard or reject."
+    quiet: true
+  loop: "{{ stalwart_recipient_policies | rejectattr('state', 'defined') | list + stalwart_recipient_policies | selectattr('state', 'defined') | selectattr('state', 'equalto', 'present') | list }}"
+  loop_control:
+    label: "{{ item.address }}"
+
+- name: List the policy entries the server has
+  ansible.builtin.command:
+    argv: ["{{ stalwart_bin_dir }}/stalwart-cli", query, MemoryLookupKeyValue, --where, "namespace={{ stalwart_recipient_policy_namespace }}", --fields, key, --json, --no-color]
+  environment:
+    STALWART_URL: "{{ stalwart_mgmt_url }}"
+    STALWART_USER: "{{ stalwart_admin_user }}"
+    STALWART_PASSWORD: "{{ stalwart_admin_password }}"
+  register: stalwart_policy_entries
+  changed_when: false
+  check_mode: false
+
+- name: Delete the policy entries that are marked absent
+  ansible.builtin.command:
+    argv: ["{{ stalwart_bin_dir }}/stalwart-cli", delete, MemoryLookupKeyValue, --ids, "{{ item.id }}", --no-color]
+  environment:
+    STALWART_URL: "{{ stalwart_mgmt_url }}"
+    STALWART_USER: "{{ stalwart_admin_user }}"
+    STALWART_PASSWORD: "{{ stalwart_admin_password }}"
+  loop: >-
+    {{ stalwart_policy_entries.stdout_lines | select('match', '^[{]') | map('from_json')
+       | selectattr('key', 'in', _absent) | list }}
+  loop_control:
+    label: "{{ item.key }}"
+  vars:
+    _absent: >-
+      {{ stalwart_recipient_policies | selectattr('state', 'defined') | selectattr('state', 'equalto', 'absent')
+         | map(attribute='address') | map('lower') | list }}
+  register: stalwart_policy_deleted
+  changed_when: true
+
+- name: Make the running server read the lookup lists
+  ansible.builtin.command:
+    argv: ["{{ stalwart_bin_dir }}/stalwart-cli", create, Action/ReloadLookupStores, --json, "{}", --no-color]
+  environment:
+    STALWART_URL: "{{ stalwart_mgmt_url }}"
+    STALWART_USER: "{{ stalwart_admin_user }}"
+    STALWART_PASSWORD: "{{ stalwart_admin_password }}"
+  changed_when: true
+  when: stalwart_apply_needed | bool or stalwart_policy_deleted is changed
