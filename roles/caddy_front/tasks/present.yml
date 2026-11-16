@@ -103,15 +103,15 @@
     # name that is also listed in stalwart_domains is handled as that entry.
     caddy_stalwart_host_entry: >-
       {%- set present = stalwart_domains | selectattr('state', 'equalto', 'present') | map(attribute='name') | list -%}
+      {%- set out = [] -%}
       {%- if stalwart_hostname | default('') | length > 0 and stalwart_hostname not in present -%}
       {%-   set best = namespace(len=0, dns=none) -%}
       {%-   for p in stalwart_domains if p.state == 'present' and p.dns is defined and stalwart_hostname.endswith('.' ~ p.name) -%}
       {%-     if p.name | length > best.len -%}{%- set best.len = p.name | length -%}{%- set best.dns = p.dns -%}{%- endif -%}
       {%-   endfor -%}
-      {{ [{'name': stalwart_hostname, 'state': 'present', 'host_only': true} | combine({'dns': best.dns} if best.dns is not none else {})] }}
-      {%- else -%}
-      []
+      {%-   set _ = out.append({'name': stalwart_hostname, 'state': 'present', 'host_only': true} | combine({'dns': best.dns} if best.dns is not none else {})) -%}
       {%- endif -%}
+      {{ out }}
 
 - name: Work out the names Caddy serves for Stalwart
   ansible.builtin.set_fact:
