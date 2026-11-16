@@ -56,6 +56,8 @@ argument_specs:
           name: {type: str, required: true, description: "Name; a folder path uses /."}
           state: {type: str, default: present, choices: [present, absent], description: "absent deletes the collection."}
           share_with: {type: dict, description: "Address (account or group) to the list of JMAP rights; replaces the sharing list; {} removes all; left out keeps it."}
+          properties: {type: dict, description: "Other JMAP properties by their JMAP names (color, description, sortOrder, isSubscribed, timeZone, isDefault ...); compared and written only when listed."}
+          rename_from: {type: str, description: "Old name (same folder): renamed in place if it exists and name does not; fails if both exist."}
           remove_content: {type: bool, default: false, description: "absent only: delete the mail, events or contacts inside as well."}
       stalwart_lists:
         type: list

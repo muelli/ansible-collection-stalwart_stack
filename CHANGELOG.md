@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `stalwart_collections` entries take `properties` (JMAP properties such as `color` or
+  `isSubscribed`, compared before writing) and `rename_from` (rename in place; fails when
+  both names exist).
 - `stalwart_recipient_policies` decides per recipient address (or glob) whether mail is filed as
   junk (`spam`), accepted and dropped (`discard`) or refused after DATA (`reject`), for explicit
   aliases and for addresses a catch-all accepts. It is built from a lookup list, an `Email`-variant

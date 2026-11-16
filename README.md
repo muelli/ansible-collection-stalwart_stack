@@ -266,6 +266,14 @@ together (`mayWriteAll` also stores `mayWriteOwn`, `mayUpdatePrivate`, `mayRSVP`
 `maySetSeen` and `maySetKeywords` go together), and the role knows them, so a second run
 changes nothing.
 
+`properties:` sets other JMAP properties by their JMAP names (calendar: `color`, `description`,
+`sortOrder`, `isSubscribed`, `isVisible`, `timeZone`, `isDefault`; address book: `description`,
+`sortOrder`, `isSubscribed`, `isDefault`; folder: `sortOrder`, `isSubscribed`). Only the listed
+ones are compared and written; one Stalwart does not know fails with its message.
+`rename_from: Old name` renames in place (same folder; the id, the content and the sharing
+stay) when the old name exists and `name` does not. Once renamed it does nothing, so the line
+may stay; when both names exist the play fails naming both ids and touches neither.
+
 ```yaml
 stalwart_groups:
   - {name: support, domain: example.org}

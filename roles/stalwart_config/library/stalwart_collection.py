@@ -25,6 +25,18 @@ options:
       - Map of address (account or group) to the list of JMAP rights granted, for example C(mayReadItems).
       - An empty map removes all sharing.
     type: dict
+  properties:
+    description:
+      - Other JMAP properties to set, by their JMAP names, for example C(color), C(description), C(sortOrder), C(isSubscribed),
+        C(timeZone) of a calendar or C(isDefault) of an address book. Only the ones listed are compared and written;
+        a name Stalwart does not know fails with the server's own message.
+    type: dict
+  rename_from:
+    description:
+      - Previous name of the collection (same format as I(name), same parent folder). If it exists and I(name) does not,
+        it is renamed in place (id, content and sharing stay). If I(name) exists already nothing is renamed; if both exist
+        the module fails and touches neither.
+    type: str
   state: {description: "absent deletes the collection.", choices: [present, absent], default: present, type: str}
   remove_content:
     description: "With state=absent: also delete the mail, events or contacts in it (otherwise Stalwart refuses to delete a non-empty one)."
@@ -97,6 +109,8 @@ def main():
             kind=dict(type="str", required=True, choices=sorted(KINDS)),
             name=dict(type="str", required=True),
             share_with=dict(type="dict"),
+            properties=dict(type="dict"),
+            rename_from=dict(type="str"),
             state=dict(type="str", default="present", choices=["present", "absent"]),
             remove_content=dict(type="bool", default=False),
         ),
@@ -118,21 +132,36 @@ def main():
         want = None
         if p["share_with"] is not None:
             want = dict((pid(a, "Shared with"), sorted(r or [])) for a, r in p["share_with"].items())
-        listing = api.call(obj + "/get", {"accountId": owner, "ids": None, "properties": props})["list"]
+        fetch = sorted(set(props) | set((p["properties"] or {}).keys()))
+        listing = api.call(obj + "/get", {"accountId": owner, "ids": None, "properties": fetch})["list"]
 
-        # Find the collection; a folder is looked up segment by segment.
-        segs = p["name"].split("/") if p["kind"] == "folder" else [p["name"]]
-        parent, found, missing_from = None, None, 0
-        for i, seg in enumerate(segs):
-            hits = [c for c in listing if c["name"] == seg and (c.get("parentId") if p["kind"] == "folder" else None) == parent]
-            if len(hits) > 1:
-                m.fail_json(msg="%d %ss named '%s' in %s (ids %s): rename or delete the extra ones, "
-                                "the role will not guess which is meant" % (len(hits), p["kind"], seg, p["owner"], ", ".join(h["id"] for h in hits)))
-            if not hits:
-                missing_from = i
-                break
-            parent, found = hits[0]["id"], hits[0]
-            missing_from = i + 1
+        def locate(path):
+            """(found, missing_from, parent_id, segments): a folder path is looked up segment by segment."""
+            segs = path.split("/") if p["kind"] == "folder" else [path]
+            parent, found = None, None
+            for i, seg in enumerate(segs):
+                hits = [c for c in listing if c["name"] == seg and (c.get("parentId") if p["kind"] == "folder" else None) == parent]
+                if len(hits) > 1:
+                    m.fail_json(msg="%d %ss named '%s' in %s (ids %s): rename or delete the extra ones, "
+                                    "the role will not guess which is meant" % (len(hits), p["kind"], seg, p["owner"], ", ".join(h["id"] for h in hits)))
+                if not hits:
+                    return found, i, parent, segs
+                parent, found = hits[0]["id"], hits[0]
+            return found, len(segs), parent, segs
+
+        found, missing_from, parent, segs = locate(p["name"])
+        renaming = None
+        if p["rename_from"] and p["state"] == "present":
+            old_segs = p["rename_from"].split("/") if p["kind"] == "folder" else [p["rename_from"]]
+            if old_segs[:-1] != segs[:-1]:
+                m.fail_json(msg="rename_from '%s' and name '%s' are in different folders; only a rename in place is supported"
+                                % (p["rename_from"], p["name"]))
+            old, old_missing, _op, _s = locate(p["rename_from"])
+            if old_missing == len(old_segs):
+                if missing_from == len(segs):
+                    m.fail_json(msg="Both %s '%s' (id %s) and '%s' (id %s) exist in %s: delete or merge one yourself, "
+                                    "the role will neither rename over nor merge them" % (p["kind"], p["rename_from"], old["id"], p["name"], found["id"], p["owner"]))
+                renaming = old
 
         if p["state"] == "absent":
             if missing_from < len(segs):
@@ -148,28 +177,39 @@ def main():
             m.exit_json(changed=True)
 
         changed = False
-        if missing_from < len(segs):
+        if renaming is not None:
+            found, changed = renaming, True
+        elif missing_from < len(segs):
             changed = True
             if not m.check_mode:
                 for i in range(missing_from, len(segs)):
                     c = {"name": segs[i]}
                     if p["kind"] == "folder":
                         c["parentId"] = parent
-                    if i == len(segs) - 1 and want is not None:
-                        c["shareWith"] = dict((k, dict((x, True) for x in v)) for k, v in want.items())
+                    if i == len(segs) - 1:
+                        c.update(p["properties"] or {})
+                        if want is not None:
+                            c["shareWith"] = dict((k, dict((x, True) for x in v)) for k, v in want.items())
                     r = api.call(obj + "/set", {"accountId": owner, "create": {"n": c}})
                     if r.get("notCreated"):
                         m.fail_json(msg="Stalwart refused to create %s '%s' of %s: %s" % (p["kind"], segs[i], p["owner"], json.dumps(r["notCreated"])))
                     parent = r["created"]["n"]["id"]
             m.exit_json(changed=True)
 
+        upd = {}
+        if renaming is not None:
+            upd["name"] = segs[-1]
+        for k, v in (p["properties"] or {}).items():
+            if found.get(k) != v:
+                upd[k] = v
         if want is not None and rights_of(found.get("shareWith")) != dict((k, with_implied(v)) for k, v in want.items()):
+            upd["shareWith"] = dict((k, dict((x, True) for x in v)) for k, v in want.items())
+        if upd:
             changed = True
             if not m.check_mode:
-                share = dict((k, dict((x, True) for x in v)) for k, v in want.items())
-                r = api.call(obj + "/set", {"accountId": owner, "update": {found["id"]: {"shareWith": share}}})
+                r = api.call(obj + "/set", {"accountId": owner, "update": {found["id"]: upd}})
                 if r.get("notUpdated"):
-                    m.fail_json(msg="Stalwart refused the sharing of %s '%s' of %s: %s" % (p["kind"], p["name"], p["owner"], json.dumps(r["notUpdated"])))
+                    m.fail_json(msg="Stalwart refused to update %s '%s' of %s (%s): %s" % (p["kind"], p["name"], p["owner"], ", ".join(sorted(upd)), json.dumps(r["notUpdated"])))
         m.exit_json(changed=changed)
     except Exception as e:  # network, auth, unexpected response
         m.fail_json(msg="Stalwart management API: %s" % e)

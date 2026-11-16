@@ -84,6 +84,13 @@ stalwart_groups: []
 #                                   # calendar: mayReadFreeBusy mayReadItems mayWriteAll mayWriteOwn
 #                                   #   mayUpdatePrivate mayRSVP mayShare mayDelete maySetMetadata
 #                                   # addressbook: mayRead mayWrite mayDelete mayShare maySetMetadata
+#     properties: {color: '#3366cc', sortOrder: 10}   # other JMAP properties, by their JMAP names
+#                                   # (calendar: color description sortOrder isSubscribed isVisible
+#                                   #  timeZone isDefault; addressbook: description sortOrder
+#                                   #  isSubscribed isDefault; folder: sortOrder isSubscribed);
+#                                   # compared first, so a second run changes nothing
+#     rename_from: Old name         # same folder: renamed in place when it exists and `name` does
+#                                   # not (id, content and sharing stay); FAILS when both exist
 #     state: present                # default; absent DELETES the collection (see remove_content)
 #     remove_content: false         # absent only: also delete the mail, events or contacts inside
 # Sharing is not inherited: a sub-folder needs its own entry. Two collections of one owner

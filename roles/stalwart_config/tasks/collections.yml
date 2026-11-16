@@ -24,6 +24,8 @@
     name: "{{ item.name }}"
     state: "{{ item.state }}"
     share_with: "{{ item.share_with | default(omit) }}"
+    properties: "{{ item.properties | default(omit) }}"
+    rename_from: "{{ item.rename_from | default(omit) }}"
     remove_content: "{{ item.remove_content | default(false) }}"
   # An owner that is itself being removed takes its collections along.
   loop: >-
