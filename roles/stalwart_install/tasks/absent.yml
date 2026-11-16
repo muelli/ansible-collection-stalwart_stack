@@ -19,6 +19,7 @@
     - "{{ stalwart_bin_dir }}/stalwart"
     - "{{ stalwart_bin_dir }}/stalwart-cli"
     - "{{ stalwart_bin_dir }}/vandelay"
+    - "{{ stalwart_bin_dir }}/stalwart-env"
     - "{{ stalwart_config_dir }}/stalwart.env"
     - "{{ stalwart_cli_env_file }}"
     - "{{ stalwart_marker_dir }}"

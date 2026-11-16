@@ -75,6 +75,9 @@ on x86_64 or aarch64 with systemd.
   `stalwart_cli_checksums`, or set `stalwart_checksum` / `stalwart_cli_checksum`.
 * `stalwart_install_vandelay: true` also installs Vandelay, Stalwart's account
   migration tool (`/usr/local/bin/vandelay`, version `stalwart_vandelay_version`).
+* `/usr/local/bin/stalwart-env` (root only) runs a command with the administrator login of
+  `/etc/stalwart/cli.env`, whatever the shell: `stalwart-env stalwart-cli query Domain`,
+  `stalwart-env vandelay export ...`.
   Run it by hand to move mail, contacts and calendars from IMAP, CalDAV,
   Maildir and others into Stalwart; no role calls it.
 * `caddy_build_method` is `download` (build service, no checksum), `xcaddy` or

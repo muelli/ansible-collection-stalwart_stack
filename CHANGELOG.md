@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `stalwart_install` installs `/usr/local/bin/stalwart-env`: `stalwart-env stalwart-cli ...` (or
+  `vandelay ...`) runs a command with the administrator login of `cli.env`, from any shell,
+  including fish, which cannot source that file. Root only.
 - `stalwart_collections` entries take `properties` (JMAP properties such as `color` or
   `isSubscribed`, compared before writing) and `rename_from` (rename in place; fails when
   both names exist).

@@ -220,6 +220,22 @@
     mode: "0600"
   no_log: true
 
+- name: Install stalwart-env, which runs a command with the CLI environment
+  # For shells that cannot source KEY=VALUE files (fish): `stalwart-env stalwart-cli ...`
+  ansible.builtin.copy:
+    dest: "{{ stalwart_bin_dir }}/stalwart-env"
+    owner: root
+    group: root
+    mode: "0700"
+    content: |
+      #!/bin/bash
+      # Managed by Ansible (stalwart_install). Runs a command with STALWART_URL, STALWART_USER
+      # and STALWART_PASSWORD set from {{ stalwart_cli_env_file }}; root only.
+      set -a
+      . {{ stalwart_cli_env_file | quote }}
+      set +a
+      exec "$@"
+
 - name: Check whether the server has been bootstrapped before
   ansible.builtin.stat:
     path: "{{ stalwart_config_dir }}/.bootstrapped"
