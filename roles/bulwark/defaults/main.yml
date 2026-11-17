@@ -9,7 +9,7 @@
 # bulwark_hostname: webmail.example.org
 
 # Needs Stalwart 1.0 with Bulwark >= 1.18.0.
-bulwark_version: "1.21.0"
+bulwark_version: "1.21.2"
 bulwark_image: ghcr.io/bulwarkmail/webmail
 # Optional: pin the image by digest as well (sha256:...), checked by podman.
 bulwark_image_digest: ""

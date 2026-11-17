@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Stalwart 1.1.1 (checksums for x86_64 and aarch64) and Bulwark 1.21.2 are the new defaults.
+  stalwart-cli stays at 1.0.14: 2.0.0 was released on 2026-11-16 and changes the output of
+  `apply`, `delete` and others, which these roles parse; it is not tested with them yet.
+
 - `stalwart_install` installs `/usr/local/bin/stalwart-env`: `stalwart-env stalwart-cli ...` (or
   `vandelay ...`) runs a command with the administrator login of `cli.env`, from any shell,
   including fish, which cannot source that file. Root only.
