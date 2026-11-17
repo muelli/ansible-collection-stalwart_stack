@@ -12,8 +12,12 @@
   authenticated sessions except `stalwart_enforce_from_header_except`. Tested on a real host
   with SMTP submission; JMAP submission (Bulwark) was not tested. `false` removes the hook.
 - Stalwart 1.1.1 (checksums for x86_64 and aarch64) and Bulwark 1.21.2 are the new defaults.
-  stalwart-cli stays at 1.0.14: 2.0.0 was released on 2026-11-16 and changes the output of
-  `apply`, `delete` and others, which these roles parse; it is not tested with them yet.
+  stalwart-cli is 2.0.0 (released the same day; checksums for x86_64 and aarch64). Its output
+  changed (`Linked by:  Account <id>` instead of `Account#<id>`); the roles read the group
+  members of a failed group deletion in both forms. Checked on a real host: apply, apply failures
+  with the hints, deletes, queries and gets, the TLS reload action, and the recovery fallback.
+- `stalwart_enforce_from_header` also holds for JMAP submission (webmail): Stalwart sends it
+  through the same DATA stage, and a spoofed From is refused with `forbiddenToSend`.
 
 - `stalwart_install` installs `/usr/local/bin/stalwart-env`: `stalwart-env stalwart-cli ...` (or
   `vandelay ...`) runs a command with the administrator login of `cli.env`, from any shell,

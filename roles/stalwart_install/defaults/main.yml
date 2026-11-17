@@ -4,7 +4,7 @@
 # release assets; an unlisted version fails unless you provide
 # stalwart_checksum / stalwart_cli_checksum yourself.
 stalwart_version: "1.1.1"
-stalwart_cli_version: "1.0.14"
+stalwart_cli_version: "2.0.0"
 
 stalwart_checksums:
   "1.1.1":
@@ -27,6 +27,9 @@ stalwart_checksums:
     aarch64: "sha256:215301c8449e3bf8efd4c39cd557dc65dc37ec5bedab47f15c22ef24631100d7"
 
 stalwart_cli_checksums:
+  "2.0.0":
+    x86_64: "sha256:1cd3da6a9d7c0153a660346314e09d6e0536ab9b0440bf123a56d16d680926d2"
+    aarch64: "sha256:884970690cf09b0d73303ab85663bdfb460782d0b984386c882600902b7bc02d"
   "1.0.14":
     x86_64: "sha256:78584b238422b0201a7bd223ed95b3c1a7fb8735ad3fa8c884d818a66fd1bc65"
     aarch64: "sha256:a30f0c1a0fb8a7ee8bc42fd0e699802e4c51257a53dbd681c4d91ddb6759792b"

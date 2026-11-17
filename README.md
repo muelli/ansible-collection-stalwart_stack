@@ -263,8 +263,8 @@ adds a DATA-stage Sieve script that refuses a message whose From address differs
 envelope sender, or that has several From addresses (`550 5.7.1`); accounts in
 `stalwart_enforce_from_header_except` are exempt. Measured over SMTP submission on Stalwart
 1.1.1: the own address, with a display name or in other case, passes; another domain, another
-local account and two addresses are refused. Submissions through JMAP (webmail) go another path
-and were not tested. `stalwart_webhooks` makes Stalwart POST events (by default failed DNS
+local account and two addresses are refused. Submissions through JMAP (webmail) pass the same
+DATA stage: a spoofed From is refused there too (`forbiddenToSend`, `550 5.7.1`). `stalwart_webhooks` makes Stalwart POST events (by default failed DNS
 record publishing, ACME and certificate trouble) to an endpoint you run; the alerts should not
 depend on the mail server they watch.
 

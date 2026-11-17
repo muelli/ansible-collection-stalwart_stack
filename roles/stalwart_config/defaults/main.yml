@@ -160,7 +160,7 @@ stalwart_webhook_default_events:
 # From address differs from the envelope sender (or that has several From addresses). It runs
 # for authenticated sessions only, except the accounts listed (their addresses, as Stalwart
 # reports them). null (default) leaves the server's setting alone, false removes the hook.
-# It replaces MtaStageData's `script`. Submissions through JMAP (Bulwark) were not tested.
+# It replaces MtaStageData's `script`. Submissions through JMAP (webmail) pass the same stage.
 stalwart_enforce_from_header: null
 stalwart_enforce_from_header_except: []
 

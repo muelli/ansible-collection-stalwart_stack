@@ -44,7 +44,10 @@
   loop_control:
     label: "{{ item.item.key }}"
   vars:
-    _linked_ids: "{{ (item.stdout ~ ' ' ~ item.stderr) | regex_findall('Linked by:\\s+Account#(\\S+)') }}"
+    # stalwart-cli 1.0 printed `Linked by: Account#<id>`, 2.0 prints `Linked by:  Account <id>`.
+    _text: "{{ item.stdout ~ ' ' ~ item.stderr }}"
+    _after: "{{ _text | regex_replace('(?s)^.*?Linked by:', '') if _text is search('Linked by:') else '' }}"
+    _linked_ids: "{{ _after | regex_findall('Account#?\\s*([A-Za-z0-9]+)') }}"
     _member: "{{ stalwart_account_ids | dict2items | selectattr('value', 'in', _linked_ids) | map(attribute='key') | list }}"
 
 - name: Destroy the mailing lists that are marked absent
