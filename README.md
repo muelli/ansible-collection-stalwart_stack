@@ -256,6 +256,18 @@ Members are listed on their accounts (`groups: [support@example.org]`, Stalwart'
 JMAP and CalDAV/CardDAV, with full rights, and Stalwart offers them the group address as an
 identity to send from.
 
+**From header and alerts.** Stalwart makes the *envelope* sender of an authenticated user one of
+their own addresses (`Must match sender`, on by default) but accepts any `From:` header, so an
+account can still show another address to the recipient. `stalwart_enforce_from_header: true`
+adds a DATA-stage Sieve script that refuses a message whose From address differs from the
+envelope sender, or that has several From addresses (`550 5.7.1`); accounts in
+`stalwart_enforce_from_header_except` are exempt. Measured over SMTP submission on Stalwart
+1.1.1: the own address, with a display name or in other case, passes; another domain, another
+local account and two addresses are refused. Submissions through JMAP (webmail) go another path
+and were not tested. `stalwart_webhooks` makes Stalwart POST events (by default failed DNS
+record publishing, ACME and certificate trouble) to an endpoint you run; the alerts should not
+depend on the mail server they watch.
+
 **Sharing** (`stalwart_collections`) gives one account or group access to a folder, calendar
 or address book of another. It is done over JMAP as the administrator, so no password of the
 owner is involved. An entry names the owner, the `kind` (`folder`, `calendar`,

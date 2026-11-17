@@ -217,6 +217,59 @@
             'condition': {'else': "key_get('" ~ stalwart_recipient_policy_namespace ~ "', email)"}}}}) -%}
 {%- endif -%}
 
+{#- Stage 4d: the From header of mail submitted by users (stalwart_enforce_from_header). Stalwart only
+    forces the envelope sender to be the user's own address; this DATA-stage Sieve script makes the
+    visible From address the same one. null leaves the server alone, false removes the hook. -#}
+{%- if stalwart_enforce_from_header is not none -%}
+{#-   An update merges objects, so the old rules have to be emptied explicitly. -#}
+{%-   set from_hook = {'match': {}, 'else': 'false'} -%}
+{%-   if stalwart_enforce_from_header | bool -%}
+{%-     set cond = namespace(text='!is_empty(authenticated_as)') -%}
+{%-     for who in stalwart_enforce_from_header_except -%}{%- set cond.text = cond.text ~ " && authenticated_as != '" ~ who ~ "'" -%}{%- endfor -%}
+{%-     set from_script -%}
+{% raw %}require ["variables", "reject", "envelope"];
+# Several mailboxes in one From header: refuse, only one can be checked against the envelope.
+if header :matches "from" "*,*" {
+  reject "550 5.7.1 Exactly one From address is allowed.";
+  stop;
+}
+if not address :all :is "from" "${envelope.from}" {
+  reject "550 5.7.1 The From address must be the address you send from.";
+}
+{% endraw %}{%-     endset -%}
+{%-     set ops.list = ops.list + [{'@type': 'upsert', 'object': 'SieveSystemScript', 'matchOn': ['name'],
+          'value': {'from-check': {'name': 'from-check', 'isActive': true, 'description': 'Managed by Ansible: From must equal the envelope sender', 'contents': from_script}}}] -%}
+{%-     set from_hook = {'match': {'0': {'if': cond.text, 'then': "'from-check'"}}, 'else': 'false'} -%}
+{%-   endif -%}
+{%-   set ops.list = ops.list + [{'@type': 'update', 'object': 'MtaStageData', 'id': 'singleton', 'value': {'script': from_hook}}] -%}
+{%- endif -%}
+
+{#- Stage 4e: webhooks (stalwart_webhooks), matched by URL. Events are listed by name: the set does not
+    accept wildcards. -#}
+{%- for hook in stalwart_webhooks -%}
+{#-   Absent webhooks are deleted by id in tasks/webhooks.yml: a WebHook cannot be filtered by URL. -#}
+{%-   if hook.state | default('present') != 'absent' -%}
+{%-     set evs = {} -%}
+{%-     for e in hook.events | default(stalwart_webhook_default_events) -%}{%- set _ = evs.update({e: true}) -%}{%- endfor -%}
+{%-     set fields = {'url': hook.url, 'enable': hook.enable | default(true) | bool, 'events': evs,
+          'eventsPolicy': hook.events_policy | default('include'), 'level': hook.level | default('warn')} -%}
+{%-     if hook.bearer_token is defined -%}
+{%-       set _ = fields.update({'httpAuth': {'@type': 'Bearer', 'bearerToken': {'@type': 'Value', 'secret': hook.bearer_token}}}) -%}
+{%-     elif hook.basic_user is defined -%}
+{%-       set _ = fields.update({'httpAuth': {'@type': 'Basic', 'username': hook.basic_user, 'secret': {'@type': 'Value', 'secret': hook.basic_password}}}) -%}
+{%-     endif -%}
+{%-     if hook.signature_key is defined -%}{%- set _ = fields.update({'signatureKey': {'@type': 'Value', 'secret': hook.signature_key}}) -%}{%- endif -%}
+{%-     if hook.headers is defined -%}{%- set _ = fields.update({'httpHeaders': hook.headers}) -%}{%- endif -%}
+{%-     for key, field in {'timeout': 'timeout', 'throttle': 'throttle', 'discard_after': 'discardAfter'}.items() if hook[key] is defined -%}
+{%-       set _ = fields.update({field: hook[key] | int}) -%}
+{%-     endfor -%}
+{%-     for key, field in {'lossy': 'lossy', 'allow_invalid_certs': 'allowInvalidCerts'}.items() if hook[key] is defined -%}
+{%-       set _ = fields.update({field: hook[key] | bool}) -%}
+{%-     endfor -%}
+{%-     set ops.list = ops.list + [{'@type': 'upsert', 'object': 'WebHook', 'matchOn': ['url'], 'value': {'webhook-' ~ loop.index: fields}}] -%}
+{%-   endif -%}
+{%- endfor -%}
+
 {#- Stage 5: system settings -#}
 {%- set trusted = {} -%}
 {%- for net in stalwart_global_proxy_trusted_networks -%}{%- set _ = trusted.update({net: true}) -%}{%- endfor -%}

@@ -382,6 +382,10 @@
   ansible.builtin.include_tasks: policies.yml
   when: stalwart_recipient_policies | length > 0
 
+- name: Remove the webhooks that are marked absent
+  ansible.builtin.include_tasks: webhooks.yml
+  when: stalwart_webhooks | selectattr('state', 'defined') | selectattr('state', 'equalto', 'absent') | list | length > 0
+
 - name: Manage folders, calendars and address books and who they are shared with
   ansible.builtin.include_tasks: collections.yml
   when: stalwart_collections_norm | length > 0

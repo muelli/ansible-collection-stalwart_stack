@@ -106,3 +106,88 @@
           - ops | selectattr('object', 'equalto', 'MemoryLookupKeyValue') | list | length == 0
           - (ops | selectattr('object', 'equalto', 'SpamRule') | first).value['policy-rule'].enable == false
         quiet: true
+
+- name: Webhooks and the From check end up in the plan
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  vars_files:
+    - ../roles/stalwart_config/defaults/main.yml
+  tasks:
+    - name: Test inputs
+      ansible.builtin.set_fact:
+        stalwart_hostname: mail.example.org
+        stalwart_domains: [{name: example.org, state: present}]
+        stalwart_accounts: []
+        stalwart_recipient_policies: []
+        stalwart_enforce_from_header: true
+        stalwart_enforce_from_header_except: [admin@example.org]
+        stalwart_webhooks:
+          - {url: 'https://hook.example/a', bearer_token: tok, level: error, timeout: 5000, headers: {X-A: b}}
+          - {url: 'https://hook.example/b', basic_user: u, basic_password: p, events: [delivery.failed], events_policy: include, enable: false}
+          - {url: 'https://hook.example/c', state: absent}
+    - name: Render
+      ansible.builtin.set_fact:
+        ops: >-
+          {{ lookup('ansible.builtin.template', '../roles/stalwart_config/templates/plan.ndjson.j2').splitlines() | map('from_json') | list }}
+    - name: Pick the pieces
+      ansible.builtin.set_fact:
+        hooks: "{{ ops | selectattr('object', 'equalto', 'WebHook') | list }}"
+        script: "{{ (ops | selectattr('object', 'equalto', 'SieveSystemScript') | first).value['from-check'] }}"
+        data: "{{ (ops | selectattr('object', 'equalto', 'MtaStageData') | first) }}"
+    - name: Check them
+      ansible.builtin.assert:
+        that:
+          - hooks | length == 2
+          - hooks[0]['@type'] == 'upsert' and hooks[0].matchOn == ['url']
+          - "hooks[0].value['webhook-1'].httpAuth == {'@type': 'Bearer', 'bearerToken': {'@type': 'Value', 'secret': 'tok'}}"
+          - hooks[0].value['webhook-1'].level == 'error'
+          - hooks[0].value['webhook-1'].timeout == 5000
+          - "hooks[0].value['webhook-1'].httpHeaders == {'X-A': 'b'}"
+          - hooks[0].value['webhook-1'].events['dns.record-creation-failed']
+          - hooks[0].value['webhook-1'].events | length == 7
+          - "hooks[1].value['webhook-2'].events == {'delivery.failed': true}"
+          - hooks[1].value['webhook-2'].enable == false
+          - hooks[1].value['webhook-2'].httpAuth.username == 'u'
+          - hooks | map(attribute='@type') | unique | list == ['upsert']
+          # the script and the hook that runs it for authenticated sessions, except the listed account
+          - "'${envelope.from}' in script.contents"
+          - script.isActive
+          - "data.value.script.match['0'].then == \"'from-check'\""
+          - "data.value.script.match['0'].if == \"!is_empty(authenticated_as) && authenticated_as != 'admin@example.org'\""
+          - data.value.script['else'] == 'false'
+        quiet: true
+
+- name: A From check set to false removes the hook, null leaves it alone, no webhooks means none
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  vars_files:
+    - ../roles/stalwart_config/defaults/main.yml
+  tasks:
+    - name: Test inputs
+      ansible.builtin.set_fact:
+        stalwart_hostname: mail.example.org
+        stalwart_domains: [{name: example.org, state: present}]
+        stalwart_accounts: []
+        stalwart_recipient_policies: []
+        stalwart_webhooks: []
+        stalwart_enforce_from_header: false
+    - name: Render with false
+      ansible.builtin.set_fact:
+        ops_off: >-
+          {{ lookup('ansible.builtin.template', '../roles/stalwart_config/templates/plan.ndjson.j2').splitlines() | map('from_json') | list }}
+    - name: Render with null
+      ansible.builtin.set_fact:
+        stalwart_enforce_from_header: null
+    - name: Render with null, for real
+      ansible.builtin.set_fact:
+        ops_unset: >-
+          {{ lookup('ansible.builtin.template', '../roles/stalwart_config/templates/plan.ndjson.j2').splitlines() | map('from_json') | list }}
+    - name: Check
+      ansible.builtin.assert:
+        that:
+          - "(ops_off | selectattr('object', 'equalto', 'MtaStageData') | first).value.script == {'match': {}, 'else': 'false'}"
+          - ops_off | selectattr('object', 'equalto', 'SieveSystemScript') | list | length == 0
+          - ops_unset | selectattr('object', 'in', ['MtaStageData', 'SieveSystemScript', 'WebHook']) | list | length == 0
+        quiet: true

@@ -1,0 +1,35 @@
+---
+# Webhooks marked `state: absent` (`stalwart_webhooks`). The plan writes the present ones, matched
+# by URL; Stalwart cannot filter a WebHook by URL, so the absent ones are looked up here and
+# deleted by id.
+- name: Wait for the management listener
+  ansible.builtin.wait_for:
+    host: "{{ stalwart_mgmt_bind.rsplit(':', 1)[0] }}"
+    port: "{{ stalwart_mgmt_bind.rsplit(':', 1)[1] | int }}"
+    timeout: 60
+
+- name: List the webhooks the server has
+  ansible.builtin.command:
+    argv: ["{{ stalwart_bin_dir }}/stalwart-cli", query, WebHook, --json, --no-color]
+  environment:
+    STALWART_URL: "{{ stalwart_mgmt_url }}"
+    STALWART_USER: "{{ stalwart_admin_user }}"
+    STALWART_PASSWORD: "{{ stalwart_admin_password }}"
+  register: stalwart_webhook_list
+  changed_when: false
+  check_mode: false
+
+- name: Delete the webhooks that are marked absent
+  ansible.builtin.command:
+    argv: ["{{ stalwart_bin_dir }}/stalwart-cli", delete, WebHook, --ids, "{{ item.id }}", --no-color]
+  environment:
+    STALWART_URL: "{{ stalwart_mgmt_url }}"
+    STALWART_USER: "{{ stalwart_admin_user }}"
+    STALWART_PASSWORD: "{{ stalwart_admin_password }}"
+  loop: >-
+    {{ stalwart_webhook_list.stdout_lines | select('match', '^[{]') | map('from_json')
+       | selectattr('url', 'in', stalwart_webhooks | selectattr('state', 'defined') | selectattr('state', 'equalto', 'absent') | map(attribute='url') | list)
+       | list }}
+  loop_control:
+    label: "{{ item.url }}"
+  changed_when: true

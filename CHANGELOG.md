@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- `stalwart_webhooks` manage Stalwart webhooks (matched by `url`): bearer or basic auth, HMAC
+  signature key, headers, level, timeouts; the default events (`stalwart_webhook_default_events`)
+  are the DNS, ACME and certificate failures, because registry sets take event names, not
+  wildcards. `state: absent` deletes by id (a webhook cannot be filtered by URL).
+- `stalwart_enforce_from_header: true` makes Stalwart refuse submitted mail whose From address
+  differs from the envelope sender (which Stalwart already forces to be the user's own address),
+  or that has several From addresses: a DATA-stage Sieve script `from-check`, run for
+  authenticated sessions except `stalwart_enforce_from_header_except`. Tested on a real host
+  with SMTP submission; JMAP submission (Bulwark) was not tested. `false` removes the hook.
 - Stalwart 1.1.1 (checksums for x86_64 and aarch64) and Bulwark 1.21.2 are the new defaults.
   stalwart-cli stays at 1.0.14: 2.0.0 was released on 2026-11-16 and changes the output of
   `apply`, `delete` and others, which these roles parse; it is not tested with them yet.

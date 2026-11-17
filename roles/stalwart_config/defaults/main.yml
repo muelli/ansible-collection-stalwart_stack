@@ -129,6 +129,41 @@ stalwart_recipient_policies: []
 stalwart_recipient_policy_namespace: rcpt-policy
 stalwart_recipient_policy_spam_score: 20
 
+# Webhooks: Stalwart POSTs the events to a URL (matched by `url`). Nothing in the role needs one;
+# the default events are the ones that show DNS, certificate and token trouble early. Events are
+# listed by their names (no wildcards); `level` is the minimum level sent.
+#   - url: https://alerts.example.org/stalwart
+#     bearer_token: "{{ vault_webhook_token }}"      # or basic_user + basic_password
+#     signature_key: "{{ vault_webhook_hmac }}"      # optional, signs the body (HMAC)
+#     events: [dns.record-creation-failed, delivery.failed]   # default: stalwart_webhook_default_events
+#     events_policy: include                         # or exclude: everything except the list
+#     level: warn                                    # error warn info debug trace; default warn
+#     headers: {X-Source: beatbox}
+#     timeout: 30000                                 # milliseconds (also throttle, discard_after)
+#     enable: true                                   # false keeps it but sends nothing
+#     lossy: false
+#     allow_invalid_certs: false
+#     state: present                                 # absent deletes it
+stalwart_webhooks: []
+stalwart_webhook_default_events:
+  - dns.record-creation-failed
+  - dns.record-propagation-timeout
+  - acme.error
+  - acme.auth-error
+  - acme.order-invalid
+  - tls.no-certificates-available
+  - telemetry.webhook-error
+
+# The visible From address of mail that users submit. Stalwart by itself only forces the
+# *envelope* sender to be one of the user's addresses (`Must match sender`); any From header is
+# accepted. true installs a DATA-stage Sieve script (`from-check`) that refuses a message whose
+# From address differs from the envelope sender (or that has several From addresses). It runs
+# for authenticated sessions only, except the accounts listed (their addresses, as Stalwart
+# reports them). null (default) leaves the server's setting alone, false removes the hook.
+# It replaces MtaStageData's `script`. Submissions through JMAP (Bulwark) were not tested.
+stalwart_enforce_from_header: null
+stalwart_enforce_from_header_except: []
+
 # Where `/` on the Stalwart host name redirects to (Http.redirectRoot). "" leaves
 # Stalwart's setting alone, which is /account.
 stalwart_redirect_root: ""

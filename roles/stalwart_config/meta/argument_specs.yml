@@ -81,6 +81,31 @@ argument_specs:
           action: {type: str, choices: [spam, discard, reject], description: "Required unless state is absent. spam delivers to Junk, discard accepts and drops, reject refuses after DATA."}
           state: {type: str, default: present, choices: [present, absent], description: "absent deletes the entry."}
       stalwart_recipient_policy_namespace: {type: str, default: rcpt-policy, description: "Namespace of the lookup list that holds the policies."}
+      stalwart_webhooks:
+        type: list
+        elements: dict
+        default: []
+        description: Webhooks Stalwart posts events to, matched by url.
+        options:
+          url: {type: str, required: true, description: "Endpoint."}
+          state: {type: str, default: present, choices: [present, absent], description: "absent deletes it."}
+          enable: {type: bool, default: true, description: "false keeps the webhook but sends nothing."}
+          events: {type: list, elements: str, description: "Event names (no wildcards); default stalwart_webhook_default_events."}
+          events_policy: {type: str, default: include, choices: [include, exclude], description: "Whether the events list is what is sent or what is left out."}
+          level: {type: str, default: warn, choices: [error, warn, info, debug, trace], description: "Minimum level sent."}
+          bearer_token: {type: str, description: "Authorization: Bearer token."}
+          basic_user: {type: str, description: "User for HTTP basic authentication (with basic_password)."}
+          basic_password: {type: str, description: "Password for HTTP basic authentication."}
+          signature_key: {type: str, description: "HMAC key that signs the request body."}
+          headers: {type: dict, description: "Extra HTTP headers."}
+          timeout: {type: int, description: "Request timeout in milliseconds."}
+          throttle: {type: int, description: "Minimum milliseconds between requests."}
+          discard_after: {type: int, description: "Milliseconds after which an undeliverable event is dropped."}
+          lossy: {type: bool, description: "Drop events when there is a backlog."}
+          allow_invalid_certs: {type: bool, description: "Accept an invalid TLS certificate of the endpoint."}
+      stalwart_webhook_default_events: {type: list, elements: str, default: [dns.record-creation-failed, dns.record-propagation-timeout, acme.error, acme.auth-error, acme.order-invalid, tls.no-certificates-available, telemetry.webhook-error], description: "Events of a webhook that lists none."}
+      stalwart_enforce_from_header: {type: bool, default: null, description: "true refuses submitted mail whose From address differs from the envelope sender; false removes that check; null leaves the server alone."}
+      stalwart_enforce_from_header_except: {type: list, elements: str, default: [], description: "Accounts (addresses) exempt from the From check."}
       stalwart_recipient_policy_spam_score: {type: float, default: 20, description: "Score of the spam tag, high enough to reach the Junk threshold."}
       stalwart_redirect_root: {type: str, default: "", description: "Where / on the Stalwart host name redirects to; \"\" keeps Stalwart's /account."}
       stalwart_check_zone: {type: bool, default: true, description: "Fail when Stalwart's CNAME records and Caddy's subdomain sites differ."}
