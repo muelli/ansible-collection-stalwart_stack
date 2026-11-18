@@ -1,0 +1,65 @@
+---
+# Stalwart writes the DNS records of a domain when a DnsManagement task runs (when the domain is
+# created, or when someone creates one), not continuously. The host name is part of the MX and of the
+# CNAMEs of mta-sts, autoconfig and autodiscover, so after a change of stalwart_hostname those records
+# keep naming the old host. This notices the change (the host name of the last run is kept in a file on
+# the host) and creates a DnsManagement task per domain with automatic DNS management.
+- name: Read the host name of the last run
+  ansible.builtin.slurp:
+    src: "{{ stalwart_data_dir }}/dns-published-hostname"
+  register: stalwart_dns_last_hostname
+  failed_when: false
+
+- name: Work out whether the host name changed
+  ansible.builtin.set_fact:
+    stalwart_dns_hostname_changed: >-
+      {{ (stalwart_dns_last_hostname.content | default('') | b64decode | trim) != stalwart_hostname }}
+
+- name: Ask Stalwart to publish the records that carry the host name again
+  when: stalwart_dns_hostname_changed
+  block:
+    - name: List the domains and how their DNS is managed
+      ansible.builtin.command:
+        argv: ["{{ stalwart_bin_dir }}/stalwart-cli", query, Domain, --fields, "name,dnsManagement", --json, --no-color]
+      environment:
+        STALWART_URL: "{{ stalwart_mgmt_url }}"
+        STALWART_USER: "{{ stalwart_admin_user }}"
+        STALWART_PASSWORD: "{{ stalwart_admin_password }}"
+      register: stalwart_dns_domain_query
+      changed_when: false
+
+    - name: Work out the tasks to create
+      ansible.builtin.set_fact:
+        stalwart_dns_republish_tasks: >-
+          {%- set want = stalwart_domains | selectattr('state', 'equalto', 'present') | map(attribute='name') | list -%}
+          {%- set out = [] -%}
+          {%- for l in stalwart_dns_domain_query.stdout_lines if l is match('^[{]') -%}
+          {%- set d = l | from_json -%}
+          {%- if d.name in want and d.dnsManagement is mapping and d.dnsManagement['@type'] == 'Automatic' -%}
+          {%- set rec = {} -%}
+          {%- for t in stalwart_dns_republish_records -%}{%- set _ = rec.update({t: true}) -%}{%- endfor -%}
+          {%- set _ = out.append({'name': d.name, 'body': {'@type': 'DnsManagement', 'domainId': d.id, 'onSuccessRenewCertificate': false, 'updateRecords': rec} | to_json}) -%}
+          {%- endif -%}
+          {%- endfor -%}
+          {{ out }}
+
+    - name: Create a DNS management task for every domain that Stalwart manages the DNS of
+      ansible.builtin.command:
+        argv: ["{{ stalwart_bin_dir }}/stalwart-cli", create, Task, --stdin, --no-color]
+        stdin: "{{ item.body }}"
+      environment:
+        STALWART_URL: "{{ stalwart_mgmt_url }}"
+        STALWART_USER: "{{ stalwart_admin_user }}"
+        STALWART_PASSWORD: "{{ stalwart_admin_password }}"
+      loop: "{{ stalwart_dns_republish_tasks }}"
+      loop_control:
+        label: "{{ item.name }}"
+      changed_when: true
+
+    - name: Remember the host name the records were published for
+      ansible.builtin.copy:
+        content: "{{ stalwart_hostname }}\n"
+        dest: "{{ stalwart_data_dir }}/dns-published-hostname"
+        owner: root
+        group: root
+        mode: "0644"

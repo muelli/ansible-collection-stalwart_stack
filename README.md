@@ -175,6 +175,13 @@ and so does an MX that points at a host whose name the certificate does not cove
 record exists, not what it says. Problems are printed; `stalwart_check_mail_fatal: true` fails the
 run, `stalwart_check_mail: false` turns the check off, `stalwart_check_mail_resolver` picks the resolver.
 
+Stalwart writes a domain's DNS records (MX, `mta-sts`/`autoconfig`/`autodiscover` CNAMEs, SRV) when a `DnsManagement`
+task runs, not continuously, so a new `stalwart_hostname` leaves the old name in public DNS. The role keeps the host
+name of its last run in `<stalwart_data_dir>/dns-published-hostname` and, when it differs (or the file is missing),
+creates a `DnsManagement` task per domain with automatic DNS management (`stalwart_dns_republish: false` turns it
+off, `stalwart_dns_republish_records` picks the record types). Run `stalwart_check_mail` afterwards to see whether
+the records changed; `stalwart_check_mail_only` never creates tasks.
+
 `stalwart_check_mail_healthcheck_uuid` makes the check ping healthchecks.io: a plain ping when nothing is wrong,
 `/fail` with the problems as the body otherwise, so a timer that stops running shows up as a missing ping
 (`stalwart_check_mail_healthcheck_url` for a self-hosted instance).
