@@ -109,6 +109,13 @@ argument_specs:
       stalwart_recipient_policy_spam_score: {type: float, default: 20, description: "Score of the spam tag, high enough to reach the Junk threshold."}
       stalwart_redirect_root: {type: str, default: "", description: "Where / on the Stalwart host name redirects to; \"\" keeps Stalwart's /account."}
       stalwart_check_zone: {type: bool, default: true, description: "Fail when Stalwart's CNAME records and Caddy's subdomain sites differ."}
+      stalwart_check_mail: {type: bool, default: true, description: "After the apply, check that the DNS records Stalwart wants are published and that each MX host has a valid certificate."}
+      stalwart_check_mail_fatal: {type: bool, default: false, description: "Fail the run on a problem found by stalwart_check_mail instead of reporting it."}
+      stalwart_check_mail_resolver: {type: str, default: 1.1.1.1, description: "Resolver for the DNS part of stalwart_check_mail; empty uses the controller's own."}
+      stalwart_check_mail_skip_types: {type: list, elements: str, default: [TLSA], description: "Record types in Stalwart's zone file that stalwart_check_mail does not look for."}
+      stalwart_check_mail_send: {type: bool, default: false, description: "Also send a test mail from every domain to a throwaway mail.tm mailbox and check signature, key and delivery."}
+      stalwart_check_mail_send_wait: {type: int, default: 120, description: "Seconds stalwart_check_mail_send waits for the test mails to arrive."}
+      stalwart_check_mail_send_packages: {type: list, elements: str, default: [python3-dkim, python3-spf, python3-nacl, python3-dnspython], description: "Packages the test mail probe needs; only named in the warning when they are missing."}
       stalwart_permissive_cors: {type: bool, default: false, description: "Stalwart's own allow-every-origin switch."}
       stalwart_absent_dns_providers: {type: list, elements: str, default: [], description: "DNS providers (dns_key_map names) that are no longer wanted."}
       stalwart_relay_hosts:

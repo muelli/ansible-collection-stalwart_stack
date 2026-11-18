@@ -1,0 +1,423 @@
+---
+# After the apply: does the outside world see what Stalwart wants, and could it deliver to us?
+# Stalwart lists the DNS records it wants for each domain (MX, SPF, DMARC, DKIM, SRV, MTA-STS,
+# TLS-RPT, ...). A DNS token that expired, a zone that was never updated or an MX that points at
+# another host shows up as delivery trouble weeks later. This asks public DNS (from the controller,
+# with dig) for each of them and also checks
+#   - that the published MX records are the ones Stalwart wants, resolve to an address and are no
+#     CNAMEs,
+#   - that every MX host answers STARTTLS on port 25 with a certificate valid for its name (a sender
+#     that checks TLS, Stalwart included, defers the mail otherwise),
+#   - that reports asked for by a DMARC record sent to another domain are authorized there
+#     (<domain>._report._dmarc.<reportdomain>), or receivers drop them,
+#   - that the MTA-STS policy is served over HTTPS and lists the MX hosts,
+#   - that the reverse name of the server's addresses is its host name (HELO).
+# A record is only checked for existence, not for its content. Problems are reported; with
+# stalwart_check_mail_fatal: true they fail the run.
+- name: Wait for the management listener
+  ansible.builtin.wait_for:
+    host: "{{ stalwart_mgmt_bind.rsplit(':', 1)[0] }}"
+    port: "{{ stalwart_mgmt_bind.rsplit(':', 1)[1] | int }}"
+    timeout: 60
+
+- name: List the domains of the server
+  ansible.builtin.command:
+    argv: ["{{ stalwart_bin_dir }}/stalwart-cli", query, Domain, --fields, name, --json, --no-color]
+  environment:
+    STALWART_URL: "{{ stalwart_mgmt_url }}"
+    STALWART_USER: "{{ stalwart_admin_user }}"
+    STALWART_PASSWORD: "{{ stalwart_admin_password }}"
+  register: stalwart_mail_domain_query
+  changed_when: false
+
+- name: Pick the domains to check
+  ansible.builtin.set_fact:
+    stalwart_mail_domains: >-
+      {%- set want = stalwart_domains | selectattr('state', 'equalto', 'present') | map(attribute='name') | list -%}
+      {%- set out = [] -%}
+      {%- for l in stalwart_mail_domain_query.stdout_lines if l is match('^[{]') -%}
+      {%- set o = l | from_json -%}
+      {%- if o.name in want -%}{%- set _ = out.append(o) -%}{%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+
+- name: Read the zone file and DNS settings of each domain
+  ansible.builtin.command:
+    argv: ["{{ stalwart_bin_dir }}/stalwart-cli", get, Domain, "{{ item.id }}", --fields, "name,dnsZoneFile,dnsManagement", --json, --no-color]
+  environment:
+    STALWART_URL: "{{ stalwart_mgmt_url }}"
+    STALWART_USER: "{{ stalwart_admin_user }}"
+    STALWART_PASSWORD: "{{ stalwart_admin_password }}"
+  loop: "{{ stalwart_mail_domains }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: stalwart_mail_zones
+  changed_when: false
+
+# One entry per record Stalwart wants: owner name and type, once. The zone file puts a record on
+# one line or, for long values, inside parentheses over several; only lines that start in the first
+# column carry an owner. Types in stalwart_check_mail_skip_types (TLSA by default: it only counts
+# with DNSSEC) are left out.
+- name: List the records Stalwart wants
+  ansible.builtin.set_fact:
+    stalwart_mail_records: >-
+      {%- set out = [] -%}
+      {%- set seen = [] -%}
+      {%- for r in stalwart_mail_zones.results -%}
+      {%- set zone = (r.stdout | from_json).dnsZoneFile | default('') -%}
+      {%- for m in zone | regex_findall('(?m)^(\S+)\s+IN\s+([A-Z]+)\s') if m[1] not in stalwart_check_mail_skip_types -%}
+      {%- set key = (m[1] ~ ' ' ~ m[0]) | regex_replace('[.]$', '') -%}
+      {%- if key not in seen -%}
+      {%- set _ = seen.append(key) -%}
+      {%- set _ = out.append({'name': m[0] | regex_replace('[.]$', ''), 'type': m[1], 'domain': r.item.name}) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {%- endfor -%}
+      {{ out }}
+    stalwart_mail_wanted_mx: >-
+      {%- set out = [] -%}
+      {%- for r in stalwart_mail_zones.results -%}
+      {%- set zone = (r.stdout | from_json).dnsZoneFile | default('') -%}
+      {%- for h in zone | regex_findall('(?m)^\S+\s+IN\s+MX\s+[0-9]+\s+(\S+?)[.]?\s*$') -%}
+      {%- set _ = out.append({'domain': r.item.name, 'host': h | lower}) -%}
+      {%- endfor -%}
+      {%- endfor -%}
+      {{ out }}
+
+- name: Look for dig on the controller
+  ansible.builtin.command: sh -c 'command -v dig'
+  delegate_to: localhost
+  become: false
+  register: stalwart_mail_dig
+  changed_when: false
+  failed_when: false
+
+- name: Say that there is nothing to compare with
+  ansible.builtin.debug:
+    msg: dig is not installed on the controller, so the DNS records were not checked (apt install bind9-dnsutils).
+  when: stalwart_mail_dig.rc != 0
+
+- name: Reset the DNS answers
+  ansible.builtin.set_fact:
+    stalwart_dig_answers: {}
+    stalwart_mail_have_dns: "{{ stalwart_mail_dig.rc == 0 }}"
+
+# 1. The records Stalwart wants.
+- name: Ask for the records
+  ansible.builtin.include_tasks: dig.yml
+  vars:
+    stalwart_dig_queries: >-
+      {%- set out = [] -%}
+      {%- for r in stalwart_mail_records -%}{%- set _ = out.append(r.type ~ ' ' ~ r.name) -%}{%- endfor -%}
+      {{ out }}
+  when: stalwart_mail_have_dns | bool
+
+# 2. What follows from the published MX and DMARC records.
+- name: Work out the published MX hosts and the DMARC report addresses
+  ansible.builtin.set_fact:
+    stalwart_mail_published_mx: >-
+      {%- set out = [] -%}
+      {%- for d in stalwart_mail_domains | map(attribute='name') -%}
+      {%- for l in stalwart_dig_answers.get('MX ' ~ d, []) -%}
+      {%- set _ = out.append({'domain': d, 'host': (l.split()[-1] | regex_replace('[.]$', '')) | lower}) -%}
+      {%- endfor -%}
+      {%- endfor -%}
+      {{ out }}
+    stalwart_mail_dmarc_external: >-
+      {%- set out = [] -%}
+      {%- for d in stalwart_mail_domains | map(attribute='name') -%}
+      {%- set txt = stalwart_dig_answers.get('TXT _dmarc.' ~ d, []) | join(' ') -%}
+      {%- for a in txt | regex_findall('mailto:([^,;\s"!]+)') -%}
+      {%- set rd = a.split('@')[-1] | lower -%}
+      {%- if rd != d and not rd.endswith('.' ~ d) and not d.endswith('.' ~ rd) and {'domain': d, 'rd': rd} not in out -%}
+      {%- set _ = out.append({'domain': d, 'rd': rd}) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {%- endfor -%}
+      {{ out }}
+  when: stalwart_mail_have_dns | bool
+
+- name: Name the hosts and addresses to look at
+  ansible.builtin.set_fact:
+    stalwart_mail_hosts: "{{ ((stalwart_mail_published_mx | default([]) | map(attribute='host') | list) + [stalwart_hostname | lower]) | unique | list }}"
+    stalwart_mail_own_ips: >-
+      {%- set out = [] -%}
+      {%- for ip in [ansible_facts.default_ipv4.address | default(''), ansible_facts.default_ipv6.address | default('')] -%}
+      {%- if ip | length > 0 and not (ip is match('^(10[.]|192[.]168[.]|172[.](1[6-9]|2[0-9]|3[01])[.]|127[.]|169[.]254[.]|fe80|fc|fd|::1)')) -%}
+      {%- set _ = out.append(ip) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+
+- name: Ask about the MX hosts, the report authorizations and the server's addresses
+  ansible.builtin.include_tasks: dig.yml
+  vars:
+    stalwart_dig_queries: >-
+      {%- set out = [] -%}
+      {%- for h in stalwart_mail_hosts -%}
+      {%- for t in ['A', 'AAAA', 'CNAME'] -%}{%- set _ = out.append(t ~ ' ' ~ h) -%}{%- endfor -%}
+      {%- endfor -%}
+      {%- for e in stalwart_mail_dmarc_external -%}{%- set _ = out.append('TXT ' ~ e.domain ~ '._report._dmarc.' ~ e.rd) -%}{%- endfor -%}
+      {%- for ip in stalwart_mail_own_ips -%}{%- set _ = out.append('PTR ' ~ ip) -%}{%- endfor -%}
+      {{ out }}
+  when: stalwart_mail_have_dns | bool
+
+# 3. The reverse names of the addresses the host name resolves to.
+- name: Ask for the reverse names
+  ansible.builtin.include_tasks: dig.yml
+  vars:
+    stalwart_dig_queries: >-
+      {%- set out = [] -%}
+      {%- for ip in stalwart_dig_answers.get('A ' ~ (stalwart_hostname | lower), []) + stalwart_dig_answers.get('AAAA ' ~ (stalwart_hostname | lower), []) if ip not in stalwart_mail_own_ips -%}
+      {%- set _ = out.append('PTR ' ~ ip) -%}
+      {%- endfor -%}
+      {{ out }}
+  when: stalwart_mail_have_dns | bool
+
+# 4. MTA-STS: Stalwart publishes the _mta-sts TXT record and a CNAME for mta-sts.<domain>, which
+# Caddy answers; the policy file itself comes from Stalwart.
+- name: Work out the MTA-STS policies to fetch
+  ansible.builtin.set_fact:
+    stalwart_mail_sts_domains: >-
+      {%- set out = [] -%}
+      {%- for d in stalwart_mail_domains | map(attribute='name') -%}
+      {%- if (stalwart_mail_records | selectattr('name', 'equalto', '_mta-sts.' ~ d) | list | length) > 0
+             and (stalwart_dig_answers.get('CNAME mta-sts.' ~ d, []) | length) > 0 -%}
+      {%- set _ = out.append(d) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+  when: stalwart_mail_have_dns | bool
+
+- name: Fetch the MTA-STS policies
+  ansible.builtin.uri:
+    url: "https://mta-sts.{{ item }}/.well-known/mta-sts.txt"
+    return_content: true
+    timeout: 15
+    status_code: [200]
+  delegate_to: localhost
+  become: false
+  loop: "{{ stalwart_mail_sts_domains | default([]) }}"
+  register: stalwart_mail_sts
+  failed_when: false
+  changed_when: false
+
+# The published MX names are what other servers connect to, whatever Stalwart wants them to be.
+- name: Probe STARTTLS on port 25 of each MX host
+  ansible.builtin.command:
+    argv: [timeout, "25", openssl, s_client, -starttls, smtp, -connect, "{{ item }}:25", -servername, "{{ item }}", -verify_hostname, "{{ item }}"]
+    stdin: "QUIT\n"
+  loop: "{{ ((stalwart_mail_hosts) + (stalwart_mail_wanted_mx | map(attribute='host') | list)) | unique | list }}"
+  register: stalwart_mail_tls
+  changed_when: false
+  failed_when: false
+
+# 5. Optional: send a test mail from every domain to a throwaway mail.tm mailbox (made for this run,
+# removed after it) and read what arrives: is the mail signed by the domain, and is the key of that
+# signature in public DNS? files/mail_probe.py makes a temporary Stalwart account per domain as the
+# administrator and deletes it right after sending. mail.tm allows 8 requests per second; the script
+# stays under that.
+- name: Send a test mail from every domain and read it back
+  when: stalwart_check_mail_send | bool
+  block:
+    # With uv on the host the script's own header installs what it needs, in a throwaway environment.
+    # Without it the host's python3 must import the packages; if not, the check says which.
+    - name: Look for uv on the host
+      ansible.builtin.command: sh -c 'command -v uv'
+      register: stalwart_mail_uv
+      changed_when: false
+      failed_when: false
+
+    - name: Send the test mails
+      ansible.builtin.script:
+        cmd: >-
+          mail_probe.py --wait {{ stalwart_check_mail_send_wait | int }}
+          {% if stalwart_check_mail_resolver | length > 0 %}--resolver {{ stalwart_check_mail_resolver | quote }}{% endif %}
+          {% for d in stalwart_mail_domains %}{{ (d.name ~ ':' ~ d.id) | quote }} {% endfor %}
+        executable: "{{ 'uv run --script' if stalwart_mail_uv.rc == 0 else 'python3' }}"
+      environment:
+        STALWART_URL: "{{ stalwart_mgmt_url }}"
+        STALWART_USER: "{{ stalwart_admin_user }}"
+        STALWART_PASSWORD: "{{ stalwart_admin_password }}"
+        STALWART_CLI: "{{ stalwart_bin_dir }}/stalwart-cli"
+      register: stalwart_mail_probe_run
+      changed_when: false
+      failed_when: false
+
+    - name: Read the results
+      ansible.builtin.set_fact:
+        stalwart_mail_probe: "{{ (stalwart_mail_probe_run.stdout | from_json) if (stalwart_mail_probe_run.rc | default(1)) == 0 else [] }}"
+        stalwart_mail_probe_failed: "{{ (stalwart_mail_probe_run.rc | default(1)) != 0 }}"
+        stalwart_mail_probe_deps: "{{ (stalwart_mail_probe_run.rc | default(1)) == 3 }}"
+        stalwart_mail_probe_error: "{{ (stalwart_mail_probe_run.stderr | default('') | trim).splitlines()[-1:] | join(' ') }}"
+
+    - name: Ask for the keys of the DKIM signatures
+      ansible.builtin.include_tasks: dig.yml
+      vars:
+        stalwart_dig_queries: >-
+          {%- set out = [] -%}
+          {%- for r in stalwart_mail_probe -%}
+          {%- for sig in r.dkim | default([]) -%}
+          {%- set _ = out.append('TXT ' ~ sig.s ~ '._domainkey.' ~ sig.d) -%}
+          {%- endfor -%}
+          {%- endfor -%}
+          {{ out }}
+      when: stalwart_mail_have_dns | bool
+
+- name: Collect the problems
+  ansible.builtin.set_fact:
+    stalwart_mail_problems: >-
+      {%- set A = stalwart_dig_answers -%}
+      {%- set out = [] -%}
+      {%- if stalwart_mail_have_dns | bool -%}
+      {#- records that are missing, per domain -#}
+      {%- for dm in stalwart_mail_domains -%}
+      {%- set d = dm.name -%}
+      {%- set recs = stalwart_mail_records | selectattr('domain', 'equalto', d) | list -%}
+      {%- set miss = [] -%}
+      {%- for r in recs if (A.get(r.type ~ ' ' ~ r.name, []) | length) == 0 -%}{%- set _ = miss.append(r.type ~ ' ' ~ r.name) -%}{%- endfor -%}
+      {%- if recs | length > 0 and miss | length == recs | length -%}
+      {%- set _ = out.append(d ~ ': none of the ' ~ (recs | length) ~ ' records Stalwart wants is in public DNS (check dns:, zone_origin and the DNS token of this domain; Stalwart logs dns.record-creation-failed)') -%}
+      {%- elif miss | length > 0 -%}
+      {%- set _ = out.append(d ~ ': not in public DNS: ' ~ (miss | join(', '))) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {#- the published MX against the wanted one -#}
+      {%- for d in stalwart_mail_domains | map(attribute='name') -%}
+      {%- set pub = stalwart_mail_published_mx | selectattr('domain', 'equalto', d) | map(attribute='host') | list -%}
+      {%- set want = stalwart_mail_wanted_mx | selectattr('domain', 'equalto', d) | map(attribute='host') | list -%}
+      {%- if pub | length > 0 and want | length > 0 and (pub | intersect(want) | length) == 0 -%}
+      {%- set _ = out.append(d ~ ': the published MX is ' ~ (pub | join(', ')) ~ ', Stalwart wants ' ~ (want | join(', '))) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {#- MX hosts without an address or behind a CNAME -#}
+      {%- for h in stalwart_mail_hosts -%}
+      {%- if (A.get('A ' ~ h, []) | length) == 0 and (A.get('AAAA ' ~ h, []) | length) == 0 -%}
+      {%- set _ = out.append(h ~ ' has no A or AAAA record' ~ (' (it is the Stalwart host name)' if h == stalwart_hostname | lower else ' (a published MX)')) -%}
+      {%- elif (A.get('CNAME ' ~ h, []) | length) > 0 and h in (stalwart_mail_published_mx | map(attribute='host') | list) -%}
+      {%- set _ = out.append(h ~ ' is a published MX but a CNAME, which an MX must not be') -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {#- DMARC reports to another domain need that domain's consent -#}
+      {%- for e in stalwart_mail_dmarc_external -%}
+      {%- if 'v=DMARC1' not in (A.get('TXT ' ~ e.domain ~ '._report._dmarc.' ~ e.rd, []) | join(' ')) -%}
+      {%- set _ = out.append('The DMARC record of ' ~ e.domain ~ ' sends reports to ' ~ e.rd ~ ', which has no ' ~ e.domain ~ '._report._dmarc.' ~ e.rd ~ ' TXT "v=DMARC1" authorizing it; receivers do not send the reports') -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {#- reverse names -#}
+      {%- set ips = [] -%}
+      {%- for ip in stalwart_mail_own_ips + A.get('A ' ~ (stalwart_hostname | lower), []) + A.get('AAAA ' ~ (stalwart_hostname | lower), []) if ip not in ips -%}
+      {%- set _ = ips.append(ip) -%}
+      {%- set ptr = A.get('PTR ' ~ ip, []) | map('regex_replace', '[.]$', '') | map('lower') | list -%}
+      {%- if stalwart_hostname | lower not in ptr -%}
+      {%- set _ = out.append('The reverse name of ' ~ ip ~ ' is ' ~ ((ptr | join(', ')) or 'not set') ~ ', but the server says ' ~ stalwart_hostname ~ ' in its HELO; strict receivers (Yahoo, Microsoft) judge the mail on that') -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {%- endif -%}
+      {#- MTA-STS -#}
+      {%- for r in stalwart_mail_sts.results | default([]) -%}
+      {%- set d = r.item -%}
+      {%- if r.status | default(-1) != 200 -%}
+      {%- set _ = out.append('The MTA-STS policy of ' ~ d ~ ' cannot be fetched from https://mta-sts.' ~ d ~ '/.well-known/mta-sts.txt: ' ~ (r.msg | default('HTTP ' ~ r.status))) -%}
+      {%- else -%}
+      {%- set body = r.content | default('') -%}
+      {%- set entries = body | regex_findall('(?m)^mx:\s*(\S+)') | map('lower') | list -%}
+      {%- if 'STSv1' not in body -%}
+      {%- set _ = out.append('The MTA-STS policy of ' ~ d ~ ' does not say version: STSv1') -%}
+      {%- endif -%}
+      {%- for h in stalwart_mail_published_mx | selectattr('domain', 'equalto', d) | map(attribute='host') | list -%}
+      {%- set ok = [] -%}
+      {%- for e in entries if e == h or (e.startswith('*.') and h.endswith(e[1:])) -%}{%- set _ = ok.append(e) -%}{%- endfor -%}
+      {%- if ok | length == 0 -%}
+      {%- set _ = out.append('The MTA-STS policy of ' ~ d ~ ' does not list the MX host ' ~ h ~ ' (lists: ' ~ (entries | join(', ')) ~ '); senders that enforce it will not deliver') -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {#- TLS of the MX hosts -#}
+      {%- for r in stalwart_mail_tls.results -%}
+      {%- set txt = (r.stdout | default('')) ~ (r.stderr | default('')) -%}
+      {%- if 'Verify return code:' not in txt -%}
+      {%- set _ = out.append('No STARTTLS answer from ' ~ r.item ~ ':25') -%}
+      {%- elif 'Verify return code: 0 ' not in txt -%}
+      {%- set _ = out.append('The certificate of ' ~ r.item ~ ':25 is not valid for that name: ' ~ (txt | regex_search('Verify return code: [0-9]+ [(][^)]*[)]'))) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {#- the test mails -#}
+      {%- if stalwart_mail_probe_failed | default(false) | bool -%}
+      {%- if stalwart_mail_probe_deps | default(false) | bool -%}
+      {%- set _ = out.append('The test mail probe (stalwart_check_mail_send) needs uv on the host (it then installs what it needs itself) or these packages for python3, and installs neither: ' ~ (stalwart_check_mail_send_packages | join(', ')) ~ ' (' ~ (stalwart_mail_probe_error | default('')) ~ ')') -%}
+      {%- else -%}
+      {%- set _ = out.append('The test mail probe failed to run (stalwart_check_mail_send): ' ~ (stalwart_mail_probe_error | default(''))) -%}
+      {%- endif -%}
+      {%- endif -%}
+      {%- for r in stalwart_mail_probe | default([]) -%}
+      {%- set d = r.domain -%}
+      {%- if r.error is defined -%}
+      {%- set _ = out.append('Test mail from ' ~ d ~ ': ' ~ r.error) -%}
+      {%- elif not (r.received | default(false)) -%}
+      {%- set _ = out.append('Test mail from ' ~ d ~ ' was sent but did not reach the throwaway mailbox within ' ~ stalwart_check_mail_send_wait ~ ' s (see the queue: stalwart-cli query QueuedMessage)') -%}
+      {%- else -%}
+      {%- set own = [] -%}
+      {%- for sig in r.dkim | default([]) if sig.d is not none and (sig.d == d or d.endswith('.' ~ sig.d)) -%}{%- set _ = own.append(sig) -%}{%- endfor -%}
+      {%- if own | length == 0 -%}
+      {%- set _ = out.append('Test mail from ' ~ d ~ ' carries no DKIM signature of that domain (signed by: ' ~ ((r.dkim | map(attribute="d") | list | join(", ")) or "nobody") ~ ')') -%}
+      {%- endif -%}
+      {%- if r.validate_error is defined -%}
+      {%- set _ = out.append('Test mail from ' ~ d ~ ': validating it failed: ' ~ r.validate_error) -%}
+      {%- endif -%}
+      {%- for sig in r.dkim | default([]) if sig.ok is defined and not sig.ok -%}
+      {%- set _ = out.append('Test mail from ' ~ d ~ ': the DKIM signature d=' ~ sig.d ~ ' s=' ~ sig.s ~ ' does not validate' ~ ((': ' ~ sig.error) if sig.error is defined else '')) -%}
+      {%- endfor -%}
+      {%- if r.spf is defined and r.spf.result != 'pass' -%}
+      {%- set _ = out.append('Test mail from ' ~ d ~ ': SPF for ' ~ r.spf.mailfrom ~ ' sent from ' ~ r.spf.ip ~ ' is ' ~ r.spf.result ~ ' (' ~ r.spf.explanation ~ ')') -%}
+      {%- endif -%}
+      {%- if r.spf is defined and r.spf.lookups is not none and r.spf.lookups | default(0) > 10 -%}
+      {%- set _ = out.append('SPF of ' ~ d ~ ' needs ' ~ r.spf.lookups ~ ' DNS lookups, the limit is 10 (permerror)') -%}
+      {%- endif -%}
+      {%- if r.dmarc is defined and r.dmarc.result == 'none' -%}
+      {%- set _ = out.append('Test mail from ' ~ d ~ ': no DMARC record found for ' ~ r.dmarc.from_domain) -%}
+      {%- elif r.dmarc is defined and r.dmarc.result == 'fail' -%}
+      {%- set _ = out.append('Test mail from ' ~ d ~ ' fails DMARC (policy ' ~ r.dmarc.policy ~ '): no valid DKIM signature or SPF result aligned with ' ~ r.dmarc.from_domain) -%}
+      {%- endif -%}
+      {%- if stalwart_mail_have_dns | bool -%}
+      {%- for sig in r.dkim | default([]) if (A.get('TXT ' ~ sig.s ~ '._domainkey.' ~ sig.d, []) | length) == 0 -%}
+      {%- set _ = out.append('Test mail from ' ~ d ~ ' is signed with selector ' ~ sig.s ~ ' but ' ~ sig.s ~ '._domainkey.' ~ sig.d ~ ' is not in public DNS') -%}
+      {%- endfor -%}
+      {%- endif -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ out | unique | list }}
+
+- name: Report what the test mails showed
+  ansible.builtin.debug:
+    msg: >-
+      {%- set out = [] -%}
+      {%- for r in stalwart_mail_probe -%}
+      {%- if r.received | default(false) and r.spf is defined and r.dmarc is defined -%}
+      {%- set _ = out.append(r.domain ~ ': DKIM ' ~ (r.dkim | selectattr('ok', 'defined') | selectattr('ok') | list | length) ~ '/' ~ (r.dkim | length) ~ ' valid, SPF ' ~ r.spf.result ~ ' from ' ~ r.spf.ip ~ ' (' ~ (r.spf.lookups if r.spf.lookups is not none else '?') ~ ' of 10 lookups, ' ~ (r.spf.dns_requests | default('?')) ~ ' DNS requests), DMARC ' ~ r.dmarc.result ~ (' (p=' ~ r.dmarc.policy ~ ')' if r.dmarc.policy else '') ~ ', ' ~ (r.dns_requests.total | default('?')) ~ ' DNS requests in all') -%}
+      {%- else -%}
+      {%- set _ = out.append(r.domain ~ ': ' ~ ('received, not validated' if r.received | default(false) else 'not received')) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+  when: stalwart_mail_probe | default([]) | length > 0
+
+- name: Report what outsiders would run into
+  ansible.builtin.debug:
+    msg: "{{ ['Mail DNS and TLS check: ' ~ (stalwart_mail_problems | length) ~ ' problem(s)'] + stalwart_mail_problems }}"
+  when:
+    - stalwart_mail_problems | length > 0
+    - not (stalwart_check_mail_fatal | bool)
+
+- name: Report that the mail DNS and TLS check found nothing
+  ansible.builtin.debug:
+    msg: "Mail DNS and TLS check: {{ stalwart_mail_domains | length }} domain(s), {{ stalwart_mail_records | length }} records, {{ stalwart_mail_hosts | length }} MX host(s): no problems"
+  when: stalwart_mail_problems | length == 0
+
+- name: Fail on problems
+  ansible.builtin.assert:
+    that: stalwart_mail_problems | length == 0
+    fail_msg: "{{ ['Mail DNS and TLS check: ' ~ (stalwart_mail_problems | length) ~ ' problem(s)'] + stalwart_mail_problems }}"
+    quiet: true
+  when: stalwart_check_mail_fatal | bool

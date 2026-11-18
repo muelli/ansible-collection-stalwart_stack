@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- After the apply, stalwart_config checks that every DNS record Stalwart wants for a domain exists in
+  public DNS (`dig` on the controller) and that each published MX host answers STARTTLS on port 25
+  with a certificate valid for its name; an MX that differs from what Stalwart wants is reported too.
+  Problems are printed, `stalwart_check_mail_fatal: true` fails the run, `stalwart_check_mail: false`
+  turns it off.
+  The check also covers DMARC report authorization (`_report._dmarc`), the MTA-STS policy over HTTPS,
+  MX hosts without addresses or behind a CNAME, and the reverse names of the server's addresses.
+  `stalwart_check_mail_send: true` additionally sends a test mail from every domain to a throwaway
+  mail.tm mailbox and validates DKIM, SPF (with its DNS lookup count) and DMARC (`files/mail_probe.py`,
+  a uv script; without uv the check names the Python packages it needs and installs nothing).
 - `stalwart_webhooks` manage Stalwart webhooks (matched by `url`): bearer or basic auth, HMAC
   signature key, headers, level, timeouts; the default events (`stalwart_webhook_default_events`)
   are the DNS, ACME and certificate failures, because registry sets take event names, not

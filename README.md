@@ -166,6 +166,29 @@ Thunderbird's fallback `/.well-known/autoconfig/mail/config-v1.1.xml`, which
 comes second after `autoconfig.<domain>`; JMAP, CalDAV and CardDAV discovery
 follow the SRV records to the host name.
 
+A second check asks public DNS (from the controller, with `dig`) for every record Stalwart wants for
+each domain (MX, SPF, DMARC, DKIM, SRV, MTA-STS, ...) and reports the ones that are missing: an expired
+DNS token or a zone that was never updated shows up there instead of weeks later as junked mail. It
+also looks at the MX records that are published and connects to each MX host on port 25 with STARTTLS:
+a certificate that is not valid for the MX name makes senders defer the mail (Stalwart does that too),
+and so does an MX that points at a host whose name the certificate does not cover. It checks that a
+record exists, not what it says. Problems are printed; `stalwart_check_mail_fatal: true` fails the
+run, `stalwart_check_mail: false` turns the check off, `stalwart_check_mail_resolver` picks the resolver.
+
+`stalwart_check_mail_send: true` adds a real delivery test: for every domain the administrator makes a
+temporary account, sends one mail to a throwaway mailbox at mail.tm (made for the run and deleted
+after it, so it is an external service and off by default) and deletes the account again. The probe,
+`roles/stalwart_config/files/mail_probe.py`, validates what arrived the way a receiver would: every DKIM
+signature (key from public DNS), SPF for the address that handed the mail over, with the number of DNS
+lookups it took (the limit is 10), and DMARC with its alignment. It reports the DNS requests it made
+too. It is a uv script: where the host has `uv` the role runs it with `uv run --script` and uv installs
+`dkimpy`, `pyspf`, `pynacl` and `dnspython` itself; otherwise python3 must import them, and if it
+cannot, the check names the packages (`stalwart_check_mail_send_packages`) and installs nothing. From
+a laptop: `STALWART_CLI='ssh root@host stalwart-env stalwart-cli' PROBE_SMTP=127.0.0.1:5587
+uv run --script mail_probe.py name:id ...` with an ssh forward of the submission port. mail.tm's copy of
+a message has blank lines added around the body, so DKIM is checked against the received headers and
+the body the probe sent. Organizational domains are approximated without the public suffix list.
+
 `/` on the Stalwart host name is not served by Stalwart itself but redirected
 (`Http.redirectRoot`, default `/account`); `stalwart_redirect_root` sets another
 URL. After applying the plan the role runs Stalwart's `ReloadSettings` action,

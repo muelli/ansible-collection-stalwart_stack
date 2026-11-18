@@ -172,6 +172,25 @@ stalwart_redirect_root: ""
 # the subdomain sites caddy_front serves, and fail on a difference.
 stalwart_check_zone: true
 
+# After the apply, ask public DNS for each record Stalwart wants (MX, SPF, DMARC, DKIM, SRV, ...)
+# and connect to every MX host on port 25 to see that its certificate is valid for the MX name.
+# Existence only, not content. Problems are reported; true fails the run instead. The DNS part
+# needs dig on the controller and uses the resolver below ("" = the controller's own).
+stalwart_check_mail: true
+stalwart_check_mail_fatal: false
+stalwart_check_mail_resolver: 1.1.1.1
+# Record types Stalwart wants that are not checked. TLSA (DANE) only counts with DNSSEC.
+stalwart_check_mail_skip_types: [TLSA]
+# Also send one test mail from every domain to a throwaway mailbox at mail.tm (made for the run,
+# removed after it; an external service, so off by default) and check that it arrives, that the
+# domain signed it and that the key of each signature is in public DNS. The administrator makes a
+# temporary account per domain and deletes it after sending. Waits this many seconds for delivery.
+stalwart_check_mail_send: false
+stalwart_check_mail_send_wait: 120
+# The probe validates DKIM, SPF and DMARC with these (Debian/Ubuntu names). Nothing installs them: when
+# the probe cannot import them the check reports this list.
+stalwart_check_mail_send_packages: [python3-dkim, python3-spf, python3-nacl, python3-dnspython]
+
 # Stalwart's own switch (Http.usePermissiveCors) allows every origin. Leave it
 # off and list the webmail origin in caddy_front's stalwart_cors_origins instead.
 stalwart_permissive_cors: false

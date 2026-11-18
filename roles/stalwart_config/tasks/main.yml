@@ -459,3 +459,11 @@
           Stalwart publishes DNS records (CNAME) for {{ stalwart_zone_missing | join(', ') }}, but caddy_front serves no
           site there. Add the label to stalwart_subdomains (or the domain's `subdomains`), or set
           stalwart_check_zone: false.
+
+# Do the records Stalwart wants exist in public DNS, and is the certificate of every MX host valid
+# for its name? Reports by default; stalwart_check_mail_fatal: true fails the run.
+- name: Check the mail DNS records and the TLS of the MX hosts
+  ansible.builtin.include_tasks: check_mail_dns.yml
+  when:
+    - stalwart_check_mail | bool
+    - not ansible_check_mode

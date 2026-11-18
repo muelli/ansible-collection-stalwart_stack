@@ -1,0 +1,40 @@
+---
+# Ask public DNS many questions at once, from the controller (what an outsider sees).
+#   in:  stalwart_dig_queries   list of "TYPE name" ("PTR 192.0.2.1" asks for the reverse name)
+#   out: stalwart_dig_answers   dict "TYPE name" -> list of answers, merged with earlier calls
+# An empty list means no answer: the name does not exist, has no such record, or the resolver failed.
+- name: Ask public DNS {{ stalwart_dig_queries | length }} questions
+  ansible.builtin.command:
+    argv:
+      - sh
+      - -c
+      - |
+        xargs -r -P 16 -L 1 sh -c '
+          if [ "$0" = PTR ]; then a=$(dig +short +time=5 +tries=2 -x "$1" $RES)
+          else a=$(dig +short +time=5 +tries=2 "$0" "$1" $RES); fi
+          printf "%s\t%s\t%s\n" "$0" "$1" "$(printf "%s" "$a" | tr "\n" "|")"
+        '
+    stdin: "{{ stalwart_dig_queries | join('\n') }}\n"
+  environment:
+    RES: "{{ '@' ~ stalwart_check_mail_resolver if stalwart_check_mail_resolver | length > 0 else '' }}"
+  delegate_to: localhost
+  become: false
+  register: stalwart_dig_run
+  changed_when: false
+  failed_when: false
+
+- name: Read the answers
+  ansible.builtin.set_fact:
+    stalwart_dig_new: >-
+      {%- set out = {} -%}
+      {%- for l in stalwart_dig_run.stdout_lines -%}
+      {%- set p = l.split('\t') -%}
+      {%- if p | length >= 2 -%}
+      {%- set _ = out.update({p[0] ~ ' ' ~ p[1]: (p[2] | default('')).split('|') | select | list}) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+
+- name: Keep the answers
+  ansible.builtin.set_fact:
+    stalwart_dig_answers: "{{ stalwart_dig_answers | default({}) | combine(stalwart_dig_new) }}"
