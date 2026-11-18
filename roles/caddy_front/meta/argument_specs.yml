@@ -45,6 +45,7 @@ argument_specs:
           name: {type: str, required: true, description: "The account."}
           state: {type: str, choices: [present, absent], description: "Defaults to caddy_user_instances_state."}
           hosts: {type: list, elements: str, default: [], description: "The names the root Caddy forwards to this account, everything on them; '*.example.org' for a wildcard (needs dns). What the account does with them is its own business."}
+          fallback: {type: str, description: "Body of a catch-all site block (http://) in the account's Caddyfile: what it answers when no site block matches the Host, e.g. 'respond \"Hi Stranger\" 404'. Without it Caddy answers an empty 200."}
           sites:
             type: list
             elements: dict
