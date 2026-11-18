@@ -240,16 +240,24 @@
         STALWART_USER: "{{ stalwart_admin_user }}"
         STALWART_PASSWORD: "{{ stalwart_admin_password }}"
         STALWART_CLI: "{{ stalwart_bin_dir }}/stalwart-cli"
+        PYTHONWARNINGS: ignore
       register: stalwart_mail_probe_run
       changed_when: false
       failed_when: false
 
+    # The result follows the marker @@PROBE-JSON@@: anything printed before it (a launcher's progress,
+    # a warning, CRLF from the connection) is skipped instead of breaking the parse.
     - name: Read the results
       ansible.builtin.set_fact:
-        stalwart_mail_probe: "{{ (stalwart_mail_probe_run.stdout | from_json) if (stalwart_mail_probe_run.rc | default(1)) == 0 else [] }}"
-        stalwart_mail_probe_failed: "{{ (stalwart_mail_probe_run.rc | default(1)) != 0 }}"
+        stalwart_mail_probe: >-
+          {%- set t = stalwart_mail_probe_run.stdout | default('') -%}
+          {{ (t.split('@@PROBE-JSON@@')[-1] | from_json) if (stalwart_mail_probe_run.rc | default(1)) == 0 and '@@PROBE-JSON@@' in t else [] }}
+        stalwart_mail_probe_failed: "{{ (stalwart_mail_probe_run.rc | default(1)) != 0 or '@@PROBE-JSON@@' not in (stalwart_mail_probe_run.stdout | default('')) }}"
         stalwart_mail_probe_deps: "{{ (stalwart_mail_probe_run.rc | default(1)) == 3 }}"
-        stalwart_mail_probe_error: "{{ (stalwart_mail_probe_run.stderr | default('') | trim).splitlines()[-1:] | join(' ') }}"
+        stalwart_mail_probe_error: >-
+          {{ (stalwart_mail_probe_run.stderr | default('') | trim).splitlines()[-1:] | join(' ')
+             if (stalwart_mail_probe_run.rc | default(1)) != 0
+             else 'no result in the output, which ends in: ' ~ (stalwart_mail_probe_run.stdout | default('') | trim)[-300:] }}
 
     - name: Ask for the keys of the DKIM signatures
       ansible.builtin.include_tasks: dig.yml

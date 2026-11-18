@@ -129,6 +129,8 @@ def main():
             call("DELETE", "/accounts/" + acc["id"], token=token)
         except Exception:
             pass
+    # a marker, so a caller can tell the result from whatever else lands in the same stream
+    sys.stdout.write("@@PROBE-JSON@@")
     json.dump(list(results.values()), sys.stdout, indent=1)
 
 
