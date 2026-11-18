@@ -17,16 +17,3 @@
     - role: bulwark
       tags: [bulwark]
       when: bulwark_enabled | default(false) | bool
-
-  post_tasks:
-    # octoDNS keeps the MX records of the Stalwart domains (dns/*/), and it runs without Ansible,
-    # so the name every host announces in its HELO and MX is written to dns/vars/<host>_mx_name.yaml
-    # for the zone files to !include. Commit the file when it changes.
-    - name: Write the MX name of this host for the octoDNS zone files
-      ansible.builtin.copy:
-        content: "{{ stalwart_hostname }}.\n"
-        dest: "{{ playbook_dir }}/../../dns/vars/{{ inventory_hostname }}_mx_name.yaml"
-        mode: "0644"
-      delegate_to: localhost
-      become: false
-      tags: [stalwart_config, stalwart_mx_name]
