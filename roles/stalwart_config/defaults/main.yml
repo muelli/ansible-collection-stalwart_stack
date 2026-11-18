@@ -178,6 +178,8 @@ stalwart_check_zone: true
 # needs dig on the controller and uses the resolver below ("" = the controller's own).
 stalwart_check_mail: true
 stalwart_check_mail_fatal: false
+# Run only the mail check and end the role before anything is applied.
+stalwart_check_mail_only: false
 stalwart_check_mail_resolver: 1.1.1.1
 # Record types Stalwart wants that are not checked. TLSA (DANE) only counts with DNSSEC.
 stalwart_check_mail_skip_types: [TLSA]

@@ -30,6 +30,15 @@
     fail_msg: stalwart_admin_password and stalwart_hostname must be set.
   no_log: true
 
+# Only the mail check, nothing applied: `just check-mail` in bitbox sets this.
+- name: Check the mail DNS records and the TLS of the MX hosts, without applying anything
+  ansible.builtin.include_tasks: check_mail_dns.yml
+  when: stalwart_check_mail_only | bool
+
+- name: Stop here when only the mail check was asked for
+  ansible.builtin.meta: end_role
+  when: stalwart_check_mail_only | bool
+
 - name: Check that every certificate the plan references exists
   ansible.builtin.stat:
     path: "{{ stalwart_certs_dir }}/{{ item.name }}.{{ ext }}"

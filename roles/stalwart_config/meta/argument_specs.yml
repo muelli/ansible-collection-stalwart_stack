@@ -111,6 +111,7 @@ argument_specs:
       stalwart_check_zone: {type: bool, default: true, description: "Fail when Stalwart's CNAME records and Caddy's subdomain sites differ."}
       stalwart_check_mail: {type: bool, default: true, description: "After the apply, check that the DNS records Stalwart wants are published and that each MX host has a valid certificate."}
       stalwart_check_mail_fatal: {type: bool, default: false, description: "Fail the run on a problem found by stalwart_check_mail instead of reporting it."}
+      stalwart_check_mail_only: {type: bool, default: false, description: "Run only the mail check (DNS, TLS, optional test mails) and end the role before anything is applied."}
       stalwart_check_mail_resolver: {type: str, default: 1.1.1.1, description: "Resolver for the DNS part of stalwart_check_mail; empty uses the controller's own."}
       stalwart_check_mail_skip_types: {type: list, elements: str, default: [TLSA], description: "Record types in Stalwart's zone file that stalwart_check_mail does not look for."}
       stalwart_check_mail_send: {type: bool, default: false, description: "Also send a test mail from every domain to a throwaway mail.tm mailbox and check signature, key and delivery."}

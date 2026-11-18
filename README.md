@@ -175,6 +175,9 @@ and so does an MX that points at a host whose name the certificate does not cove
 record exists, not what it says. Problems are printed; `stalwart_check_mail_fatal: true` fails the
 run, `stalwart_check_mail: false` turns the check off, `stalwart_check_mail_resolver` picks the resolver.
 
+`stalwart_check_mail_only: true` runs just this check and ends the role before anything is applied (`just check-mail` in
+the DebOps project sets it, plus `stalwart_check_mail_fatal`, so the exit code says whether DNS and TLS are in order).
+
 `stalwart_check_mail_send: true` adds a real delivery test: for every domain the administrator makes a
 temporary account, sends one mail to a throwaway mailbox at mail.tm (made for the run and deleted
 after it, so it is an external service and off by default) and deletes the account again. The probe,

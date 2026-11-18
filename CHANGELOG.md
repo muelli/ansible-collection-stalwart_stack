@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `stalwart_check_mail_only: true` runs only the mail check and ends stalwart_config before anything is applied.
 - After the apply, stalwart_config checks that every DNS record Stalwart wants for a domain exists in
   public DNS (`dig` on the controller) and that each published MX host answers STARTTLS on port 25
   with a certificate valid for its name; an MX that differs from what Stalwart wants is reported too.
