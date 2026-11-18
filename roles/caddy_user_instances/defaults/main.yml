@@ -11,6 +11,8 @@
 #       - '*.alice.example.org'    # with it. A wildcard needs a DNS provider (see
 #                                  # caddy_front: a caddy_domains entry with `dns:`
 #                                  # or the Stalwart domain it lies below).
+#     fallback: |                  # optional: body of a catch-all `http://` block,
+#       respond "Hi Stranger" 404  # used for hosts no site block names
 #     sites:                       # optional: conf.d files this role writes
 #       - name: www                # file conf.d/www.conf; default: the first host
 #         state: present           # default; absent removes conf.d/www.conf

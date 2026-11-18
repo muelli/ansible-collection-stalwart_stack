@@ -10,3 +10,10 @@
 }
 
 import {{ _caddy_conf_dir }}/*.conf
+{% if caddy_user_item.fallback | default('') | length > 0 %}
+
+# Catch-all: every request on a host no other site block names.
+http:// {
+{{ caddy_user_item.fallback | indent(4, true) }}
+}
+{% endif %}
