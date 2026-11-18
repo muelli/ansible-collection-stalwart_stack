@@ -114,7 +114,7 @@ argument_specs:
       stalwart_check_mail_only: {type: bool, default: false, description: "Run only the mail check (DNS, TLS, optional test mails) and end the role before anything is applied."}
       stalwart_check_mail_healthcheck_uuid: {type: str, default: "", description: "healthchecks.io check UUID: the mail check pings it on success and pings /fail with the problems otherwise. Empty: no ping."}
       stalwart_check_mail_healthcheck_url: {type: str, default: "https://hc-ping.com", description: "Base URL of the ping endpoint; change it for a self-hosted healthchecks instance."}
-      stalwart_dns_republish: {type: bool, default: true, description: "When stalwart_hostname differs from the one of the last run, create a DnsManagement task per domain (automatic DNS management only) so Stalwart publishes the records that carry the host name again."}
+      stalwart_dns_republish: {type: bool, default: true, description: "Create a DnsManagement task for every domain (automatic DNS management only) whose published MX or CNAME records name another host than Stalwart's zone file, e.g. after a change of stalwart_hostname. Needs dig on the controller."}
       stalwart_dns_republish_records: {type: list, elements: str, default: [mx, mtaSts, autoConfig, autoConfigLegacy, autoDiscover, srv], description: "DnsRecordType values those tasks update."}
       stalwart_check_mail_resolver: {type: str, default: 1.1.1.1, description: "Resolver for the DNS part of stalwart_check_mail; empty uses the controller's own."}
       stalwart_check_mail_skip_types: {type: list, elements: str, default: [TLSA], description: "Record types in Stalwart's zone file that stalwart_check_mail does not look for."}

@@ -2,21 +2,25 @@
 # Stalwart writes the DNS records of a domain when a DnsManagement task runs (when the domain is
 # created, or when someone creates one), not continuously. The host name is part of the MX and of the
 # CNAMEs of mta-sts, autoconfig and autodiscover, so after a change of stalwart_hostname those records
-# keep naming the old host. This notices the change (the host name of the last run is kept in a file on
-# the host) and creates a DnsManagement task per domain with automatic DNS management.
-- name: Read the host name of the last run
-  ansible.builtin.slurp:
-    src: "{{ stalwart_data_dir }}/dns-published-hostname"
-  register: stalwart_dns_last_hostname
+# keep naming the old host. No state is kept for this: Stalwart's own zone file for each domain says
+# what it wants, public DNS says what is there, and a domain whose MX or CNAME record exists but names
+# another target gets a DnsManagement task. Records that do not exist are left to the mail check (a task
+# that cannot create them would fail again on every run).
+- name: Look for dig on the controller
+  ansible.builtin.command: sh -c 'command -v dig'
+  delegate_to: localhost
+  become: false
+  register: stalwart_dns_dig
+  changed_when: false
   failed_when: false
 
-- name: Work out whether the host name changed
-  ansible.builtin.set_fact:
-    stalwart_dns_hostname_changed: >-
-      {{ (stalwart_dns_last_hostname.content | default('') | b64decode | trim) != stalwart_hostname }}
+- name: Say why the records were not compared
+  ansible.builtin.debug:
+    msg: dig is not installed on the controller, so stale host names in DNS were not looked for (apt install bind9-dnsutils).
+  when: stalwart_dns_dig.rc != 0
 
-- name: Ask Stalwart to publish the records that carry the host name again
-  when: stalwart_dns_hostname_changed
+- name: Republish the records that name a host Stalwart no longer uses
+  when: stalwart_dns_dig.rc == 0
   block:
     - name: List the domains and how their DNS is managed
       ansible.builtin.command:
@@ -28,22 +32,73 @@
       register: stalwart_dns_domain_query
       changed_when: false
 
-    - name: Work out the tasks to create
+    - name: Pick the domains with automatic DNS management
       ansible.builtin.set_fact:
-        stalwart_dns_republish_tasks: >-
+        stalwart_dns_domains: >-
           {%- set want = stalwart_domains | selectattr('state', 'equalto', 'present') | map(attribute='name') | list -%}
           {%- set out = [] -%}
           {%- for l in stalwart_dns_domain_query.stdout_lines if l is match('^[{]') -%}
           {%- set d = l | from_json -%}
           {%- if d.name in want and d.dnsManagement is mapping and d.dnsManagement['@type'] == 'Automatic' -%}
-          {%- set rec = {} -%}
-          {%- for t in stalwart_dns_republish_records -%}{%- set _ = rec.update({t: true}) -%}{%- endfor -%}
-          {%- set _ = out.append({'name': d.name, 'body': {'@type': 'DnsManagement', 'domainId': d.id, 'onSuccessRenewCertificate': false, 'updateRecords': rec} | to_json}) -%}
+          {%- set _ = out.append(d) -%}
           {%- endif -%}
           {%- endfor -%}
           {{ out }}
 
-    - name: Create a DNS management task for every domain that Stalwart manages the DNS of
+    - name: Read the zone file of each of them
+      ansible.builtin.command:
+        argv: ["{{ stalwart_bin_dir }}/stalwart-cli", get, Domain, "{{ item.id }}", --fields, "name,dnsZoneFile", --json, --no-color]
+      environment:
+        STALWART_URL: "{{ stalwart_mgmt_url }}"
+        STALWART_USER: "{{ stalwart_admin_user }}"
+        STALWART_PASSWORD: "{{ stalwart_admin_password }}"
+      loop: "{{ stalwart_dns_domains }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: stalwart_dns_zones
+      changed_when: false
+
+    # Owner, type and target of every MX and CNAME record Stalwart wants.
+    - name: List the records that carry a host name
+      ansible.builtin.set_fact:
+        stalwart_dns_wanted: >-
+          {%- set out = [] -%}
+          {%- for r in stalwart_dns_zones.results -%}
+          {%- set zone = (r.stdout | from_json).dnsZoneFile | default('') -%}
+          {%- for m in zone | regex_findall('(?m)^(\S+)\s+IN\s+(MX|CNAME)\s+(?:[0-9]+\s+)?(\S+)') -%}
+          {%- set _ = out.append({'domain': r.item.name, 'type': m[1], 'name': m[0] | regex_replace('[.]$', '') | lower, 'target': m[2] | regex_replace('[.]$', '') | lower}) -%}
+          {%- endfor -%}
+          {%- endfor -%}
+          {{ out }}
+        stalwart_dig_answers: {}
+
+    - name: Ask public DNS for them
+      ansible.builtin.include_tasks: dig.yml
+      vars:
+        stalwart_dig_queries: >-
+          {%- set out = [] -%}
+          {%- for w in stalwart_dns_wanted -%}
+          {%- set _ = out.append(w.type ~ ' ' ~ w.name) -%}
+          {%- endfor -%}
+          {{ out | unique | list }}
+
+    - name: Work out the tasks to create
+      ansible.builtin.set_fact:
+        stalwart_dns_republish_tasks: >-
+          {%- set stale = [] -%}
+          {%- for w in stalwart_dns_wanted -%}
+          {%- set got = stalwart_dig_answers.get(w.type ~ ' ' ~ w.name, []) | map('regex_replace', '^[0-9]+\s+', '') | map('regex_replace', '[.]$', '') | map('lower') | list -%}
+          {%- if got | length > 0 and w.target not in got and w.domain not in stale -%}{%- set _ = stale.append(w.domain) -%}{%- endif -%}
+          {%- endfor -%}
+          {%- set out = [] -%}
+          {%- for d in stalwart_dns_domains if d.name in stale -%}
+          {%- set rec = {} -%}
+          {%- for t in stalwart_dns_republish_records -%}{%- set _ = rec.update({t: true}) -%}{%- endfor -%}
+          {%- set _ = out.append({'name': d.name, 'body': {'@type': 'DnsManagement', 'domainId': d.id, 'onSuccessRenewCertificate': false, 'updateRecords': rec} | to_json}) -%}
+          {%- endfor -%}
+          {{ out }}
+
+    - name: Create a DNS management task for every domain with a stale host name
       ansible.builtin.command:
         argv: ["{{ stalwart_bin_dir }}/stalwart-cli", create, Task, --stdin, --no-color]
         stdin: "{{ item.body }}"
@@ -55,11 +110,3 @@
       loop_control:
         label: "{{ item.name }}"
       changed_when: true
-
-    - name: Remember the host name the records were published for
-      ansible.builtin.copy:
-        content: "{{ stalwart_hostname }}\n"
-        dest: "{{ stalwart_data_dir }}/dns-published-hostname"
-        owner: root
-        group: root
-        mode: "0644"

@@ -176,11 +176,13 @@ record exists, not what it says. Problems are printed; `stalwart_check_mail_fata
 run, `stalwart_check_mail: false` turns the check off, `stalwart_check_mail_resolver` picks the resolver.
 
 Stalwart writes a domain's DNS records (MX, `mta-sts`/`autoconfig`/`autodiscover` CNAMEs, SRV) when a `DnsManagement`
-task runs, not continuously, so a new `stalwart_hostname` leaves the old name in public DNS. The role keeps the host
-name of its last run in `<stalwart_data_dir>/dns-published-hostname` and, when it differs (or the file is missing),
-creates a `DnsManagement` task per domain with automatic DNS management (`stalwart_dns_republish: false` turns it
-off, `stalwart_dns_republish_records` picks the record types). Run `stalwart_check_mail` afterwards to see whether
-the records changed; `stalwart_check_mail_only` never creates tasks.
+task runs, not continuously, so a new `stalwart_hostname` leaves the old name in public DNS. After the apply the role
+compares the MX and CNAME records of Stalwart's own zone file for each automatically managed domain with public DNS
+(`dig` on the controller); a domain with such a record that exists but names another target gets a `DnsManagement`
+task. Nothing is remembered between runs, and a record that is missing altogether is left to the check below.
+`stalwart_dns_republish: false` turns it off, `stalwart_dns_republish_records` picks the record types;
+`stalwart_check_mail_only` never creates tasks. A resolver cache can show the old record for up to its TTL, in which
+case the next run creates one more task, which does no harm.
 
 `stalwart_check_mail_healthcheck_uuid` makes the check ping healthchecks.io: a plain ping when nothing is wrong,
 `/fail` with the problems as the body otherwise, so a timer that stops running shows up as a missing ping

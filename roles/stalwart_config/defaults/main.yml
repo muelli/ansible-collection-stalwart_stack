@@ -180,8 +180,8 @@ stalwart_check_mail: true
 stalwart_check_mail_fatal: false
 # Run only the mail check and end the role before anything is applied.
 stalwart_check_mail_only: false
-# After a change of stalwart_hostname, make Stalwart publish the records that carry it again (MX,
-# MTA-STS, autoconfig, autodiscover, SRV) by creating a DnsManagement task per domain.
+# Where public DNS has an MX or CNAME record naming another host than Stalwart's zone file does (a
+# changed stalwart_hostname), make Stalwart publish its records again with a DnsManagement task.
 stalwart_dns_republish: true
 stalwart_dns_republish_records: [mx, mtaSts, autoConfig, autoConfigLegacy, autoDiscover, srv]
 # healthchecks.io check UUID (or the slug URL part of a self-hosted instance): the mail check pings it

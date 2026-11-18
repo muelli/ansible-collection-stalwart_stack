@@ -470,8 +470,8 @@
           stalwart_check_zone: false.
 
 # A new stalwart_hostname changes the MX and the client-configuration and MTA-STS CNAMEs, which
-# Stalwart only rewrites when a DnsManagement task runs: start those.
-- name: Publish the records that carry the host name again when it changed
+# Stalwart only rewrites when a DnsManagement task runs: start those where public DNS is stale.
+- name: Publish the records that name a stale host again
   ansible.builtin.include_tasks: dns_republish.yml
   when:
     - stalwart_dns_republish | bool
