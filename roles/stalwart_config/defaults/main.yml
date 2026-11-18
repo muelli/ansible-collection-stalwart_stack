@@ -180,6 +180,10 @@ stalwart_check_mail: true
 stalwart_check_mail_fatal: false
 # Run only the mail check and end the role before anything is applied.
 stalwart_check_mail_only: false
+# healthchecks.io check UUID (or the slug URL part of a self-hosted instance): the mail check pings it
+# on success and pings .../fail with the problems otherwise. Empty: no ping.
+stalwart_check_mail_healthcheck_uuid: ""
+stalwart_check_mail_healthcheck_url: https://hc-ping.com
 stalwart_check_mail_resolver: 1.1.1.1
 # Record types Stalwart wants that are not checked. TLSA (DANE) only counts with DNSSEC.
 stalwart_check_mail_skip_types: [TLSA]

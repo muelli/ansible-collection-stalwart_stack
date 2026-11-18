@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `stalwart_check_mail_healthcheck_uuid` pings healthchecks.io after the mail check (`/fail` with the problems when there are any).
 - `stalwart_check_mail_only: true` runs only the mail check and ends stalwart_config before anything is applied.
 - After the apply, stalwart_config checks that every DNS record Stalwart wants for a domain exists in
   public DNS (`dig` on the controller) and that each published MX host answers STARTTLS on port 25

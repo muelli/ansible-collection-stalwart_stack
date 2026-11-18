@@ -423,6 +423,31 @@
     msg: "Mail DNS and TLS check: {{ stalwart_mail_domains | length }} domain(s), {{ stalwart_mail_records | length }} records, {{ stalwart_mail_hosts | length }} MX host(s): no problems"
   when: stalwart_mail_problems | length == 0
 
+# healthchecks.io (or a compatible service): a success ping when nothing is wrong, a /fail ping with the
+# problems as its body otherwise. A check that stops running (a timer that died, the controller down)
+# shows up there as a missing ping. Sent from the controller; the UUID is part of the URL, so the task
+# output is hidden.
+- name: Tell the health check service how the mail check went
+  ansible.builtin.uri:
+    url: "{{ stalwart_check_mail_healthcheck_url | regex_replace('/+$', '') }}/{{ stalwart_check_mail_healthcheck_uuid }}{{ '' if stalwart_mail_problems | length == 0 else '/fail' }}"
+    method: POST
+    body: "{{ ('Mail check: ' ~ (stalwart_mail_problems | length) ~ ' problem(s)\n' ~ (stalwart_mail_problems | join('\n')))[:50000] if stalwart_mail_problems | length > 0 else 'Mail check: no problems' }}"
+    timeout: 20
+  delegate_to: localhost
+  become: false
+  no_log: true
+  register: stalwart_mail_healthcheck
+  failed_when: false
+  changed_when: false
+  when: stalwart_check_mail_healthcheck_uuid | length > 0
+
+- name: Warn when the health check service could not be told
+  ansible.builtin.debug:
+    msg: "The health check ping failed (HTTP status {{ stalwart_mail_healthcheck.status | default('none') }}): check stalwart_check_mail_healthcheck_uuid and _url"
+  when:
+    - stalwart_check_mail_healthcheck_uuid | length > 0
+    - stalwart_mail_healthcheck.status | default(0) != 200
+
 - name: Fail on problems
   ansible.builtin.assert:
     that: stalwart_mail_problems | length == 0

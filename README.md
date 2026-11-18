@@ -175,6 +175,10 @@ and so does an MX that points at a host whose name the certificate does not cove
 record exists, not what it says. Problems are printed; `stalwart_check_mail_fatal: true` fails the
 run, `stalwart_check_mail: false` turns the check off, `stalwart_check_mail_resolver` picks the resolver.
 
+`stalwart_check_mail_healthcheck_uuid` makes the check ping healthchecks.io: a plain ping when nothing is wrong,
+`/fail` with the problems as the body otherwise, so a timer that stops running shows up as a missing ping
+(`stalwart_check_mail_healthcheck_url` for a self-hosted instance).
+
 `stalwart_check_mail_only: true` runs just this check and ends the role before anything is applied (`just check-mail` in
 the DebOps project sets it, plus `stalwart_check_mail_fatal`, so the exit code says whether DNS and TLS are in order).
 
