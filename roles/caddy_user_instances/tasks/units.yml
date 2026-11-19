@@ -17,6 +17,16 @@
     path: "/run/user/{{ _caddy_uid }}/bus"
     timeout: 30
 
+- name: Clear a failed state of the front socket (trigger limit hit while Caddy could not start)
+  ansible.builtin.command:
+    argv: [systemctl, --user, reset-failed, caddy-user.socket, caddy-user-proxy.service, caddy-user.service]
+  become: true
+  become_user: "{{ _caddy_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ _caddy_uid }}"
+  changed_when: false
+  failed_when: false   # units not loaded yet on a first run
+
 - name: Enable and start the front socket
   ansible.builtin.systemd_service:
     name: caddy-user.socket

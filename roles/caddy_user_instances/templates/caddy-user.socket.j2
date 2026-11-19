@@ -7,6 +7,9 @@ ListenStream={{ caddy_user_socket_dir }}/%u.sock
 # The fronting Caddy reaches the socket through the group, nobody else can.
 SocketMode=0660
 SocketGroup={{ _caddy_user }}
+# A Caddy that cannot start (bad config) makes every connection fail its activation;
+# the default limit (200 per 2s burst) would put the socket into `failed` for good.
+TriggerLimitIntervalSec=0
 Service=caddy-user-proxy.service
 
 [Install]
