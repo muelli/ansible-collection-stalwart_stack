@@ -76,8 +76,23 @@
 {%-   endif -%}
 {%- endfor -%}
 
-{#- Stage 3: certificates synced from Caddy -#}
-{%- for domain in stalwart_domains if domain.state == 'present' -%}
+{#- Stage 3a: ACME accounts, for the domains with `certificate: acme` (Stalwart orders those itself). -#}
+{%- set acme_challenge = {'dns01': 'Dns01', 'http01': 'Http01', 'tls-alpn01': 'TlsAlpn01', 'dns-persist01': 'DnsPersist01'} -%}
+{%- set acme_renew = {'1/2': 'R12', '2/3': 'R23', '3/4': 'R34', '4/5': 'R45'} -%}
+{%- for prov in stalwart_acme_providers | default([]) -%}
+{%-   set fields = {
+        'description': prov.name,
+        'directory': prov.directory,
+        'challengeType': acme_challenge[prov.challenge | default('dns01')],
+        'contact': {prov.contact: true},
+        'renewBefore': acme_renew[prov.renew_before | default('2/3')],
+        'reuseKey': prov.reuse_key | default(false) | bool} -%}
+{%-   if prov.eab_key_id is defined -%}{%- set _ = fields.update({'eabKeyId': prov.eab_key_id, 'eabHmacKey': {'@type': 'Value', 'secret': prov.eab_hmac_key}}) -%}{%- endif -%}
+{%-   set ops.list = ops.list + [{'@type': 'upsert', 'object': 'AcmeProvider', 'matchOn': ['description'], 'value': {'acme-' ~ prov.name: fields}}] -%}
+{%- endfor -%}
+
+{#- Stage 3: certificates synced from Caddy (not for the domains Stalwart orders itself) -#}
+{%- for domain in stalwart_domains if domain.state == 'present' and domain.certificate | default('caddy') != 'acme' -%}
 {%-   set slug = 'certificate-' ~ (domain.name | replace('.', '-')) -%}
 {%-   set ops.list = ops.list + [{
         '@type': 'upsert', 'object': 'Certificate', 'matchOn': ['subjectAlternativeNames'],
@@ -89,7 +104,7 @@
 
 {#- The host name of the server is not a mail domain but needs a certificate for the mail ports. -#}
 {%- set domain_names = stalwart_domains | selectattr('state', 'equalto', 'present') | map(attribute='name') | list -%}
-{%- if stalwart_hostname is defined and stalwart_hostname | length > 0 and stalwart_hostname not in domain_names -%}
+{%- if stalwart_hostname is defined and stalwart_hostname | length > 0 and stalwart_hostname not in domain_names and not (stalwart_acme_hostname_covered | default(false) | bool) -%}
 {%-   set ops.list = ops.list + [{
         '@type': 'upsert', 'object': 'Certificate', 'matchOn': ['subjectAlternativeNames'],
         'value': {('certificate-' ~ (stalwart_hostname | replace('.', '-'))): {
@@ -110,9 +125,16 @@
 {%-   set slug = 'certificate-' ~ (domain.name | replace('.', '-')) -%}
 {%-   set dns_mgmt = {'@type': 'Automatic', 'dnsServerId': '#dns-' ~ (domain.dns | lower)} if domain.dns is defined else {'@type': 'Manual'} -%}
 {%-   if domain.dns is defined and domain.zone_origin is defined -%}{%- set _ = dns_mgmt.update({'origin': domain.zone_origin}) -%}{%- endif -%}
+{%-   if domain.certificate | default('caddy') == 'acme' -%}
+{%-     set san = {} -%}
+{%-     for n in domain.acme_names | default([]) -%}{%- set _ = san.update({n: true}) -%}{%- endfor -%}
+{%-     set cert_mgmt = {'@type': 'Automatic', 'acmeProviderId': '#acme-' ~ (domain.acme_provider | default(stalwart_acme_default_provider)), 'subjectAlternativeNames': san} -%}
+{%-   else -%}
+{%-     set cert_mgmt = {'@type': 'Manual', 'certificateId': '#' ~ slug} -%}
+{%-   endif -%}
 {%-   set fields = {
           'name': domain.name,
-          'certificateManagement': {'@type': 'Manual', 'certificateId': '#' ~ slug},
+          'certificateManagement': cert_mgmt,
           'dnsManagement': dns_mgmt} -%}
 {#- Without catch_all the server's value is left alone; null or "" clears it. -#}
 {%-   if domain.catch_all is defined -%}{%- set _ = fields.update({'catchAllAddress': (domain.catch_all or none)}) -%}{%- endif -%}

@@ -19,6 +19,9 @@ argument_specs:
           catch_all: {type: str, description: "Catch-all address (used by stalwart_config)."}
           wildcard: {type: bool, default: true, description: "false: no wildcard certificate, every name gets its own."}
           serve_http: {type: bool, default: false, description: "true: forward everything on the domain's own name to Stalwart."}
+          certificate: {type: str, default: caddy, choices: [caddy, acme], description: "acme: Stalwart orders the certificates of this domain itself (stalwart_acme_providers); Caddy then orders and copies none and serves no placeholder."}
+          acme_provider: {type: str, description: "Used by stalwart_config."}
+          acme_names: {type: list, elements: str, default: [], description: "Names of the certificate Stalwart orders; empty with dns01 means the domain and a wildcard."}
       stalwart_subdomains: {type: list, elements: str, default: [mta-sts, autoconfig, autodiscover, ua-auto-config], description: "Subdomains of every mail domain forwarded to Stalwart."}
       stalwart_serve_http: {type: bool, default: false, description: "Default of serve_http for all domains."}
       caddy_domains:

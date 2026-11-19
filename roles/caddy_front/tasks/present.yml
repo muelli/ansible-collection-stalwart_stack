@@ -84,13 +84,20 @@
       {%- endfor -%}
       {{ out }}
 
+- name: Refuse certificate acme on a domain Caddy has to serve
+  ansible.builtin.assert:
+    that: stalwart_domains | selectattr('state', 'equalto', 'present') | selectattr('certificate', 'defined') | selectattr('certificate', 'equalto', 'acme') | selectattr('serve_http', 'defined') | selectattr('serve_http') | list | length == 0
+    fail_msg: >-
+      A domain with `certificate: acme` cannot have `serve_http: true`: Caddy would need the certificate
+      of its name, and Stalwart keeps the one it orders to itself.
+
 - name: Work out which Stalwart domains get a wildcard certificate
   ansible.builtin.set_fact:
     # Every present domain unless `wildcard: false`. Needs DNS-01, so a `dns:`
     # provider (or the internal CA).
     caddy_wildcard_parents: >-
       {%- set out = [] -%}
-      {%- for d in stalwart_domains if d.state == 'present' and d.wildcard | default(true) -%}
+      {%- for d in stalwart_domains if d.state == 'present' and d.wildcard | default(true) and d.certificate | default('caddy') != 'acme' -%}
       {%- if caddy_tls_mode == 'internal' or d.dns is defined -%}{%- set _ = out.append(d.name) -%}{%- endif -%}
       {%- endfor -%}
       {{ out }}
@@ -104,7 +111,13 @@
     caddy_stalwart_host_entry: >-
       {%- set present = stalwart_domains | selectattr('state', 'equalto', 'present') | map(attribute='name') | list -%}
       {%- set out = [] -%}
-      {%- if stalwart_hostname | default('') | length > 0 and stalwart_hostname not in present -%}
+      {#- A domain with `certificate: acme` (Stalwart orders it itself) that lists the host name, or has no
+          acme_names and the host lies below it, provides its certificate: nothing to do for Caddy. -#}
+      {%- set acme = namespace(covered=false) -%}
+      {%- for d in stalwart_domains if d.state == 'present' and d.certificate | default('caddy') == 'acme' -%}
+      {%-   if stalwart_hostname | default('') | length > 0 and (stalwart_hostname in d.acme_names | default([]) or (d.acme_names | default([]) | length == 0 and stalwart_hostname.endswith('.' ~ d.name))) -%}{%- set acme.covered = true -%}{%- endif -%}
+      {%- endfor -%}
+      {%- if stalwart_hostname | default('') | length > 0 and stalwart_hostname not in present and not acme.covered -%}
       {%-   set best = namespace(len=0, dns=none) -%}
       {%-   for p in stalwart_domains if p.state == 'present' and p.dns is defined and stalwart_hostname.endswith('.' ~ p.name) -%}
       {%-     if p.name | length > best.len -%}{%- set best.len = p.name | length -%}{%- set best.dns = p.dns -%}{%- endif -%}
@@ -115,7 +128,9 @@
 
 - name: Work out the names Caddy serves for Stalwart
   ansible.builtin.set_fact:
-    caddy_stalwart_entries: "{{ stalwart_domains + caddy_stalwart_host_entry }}"
+    # Domains with `certificate: acme` are left out: Stalwart orders their certificates itself, so Caddy
+    # neither serves a placeholder nor copies a certificate for them.
+    caddy_stalwart_entries: "{{ (stalwart_domains | rejectattr('certificate', 'equalto', 'acme') | list) + caddy_stalwart_host_entry }}"
 
 - name: Work out which Stalwart names get a site that forwards to Stalwart
   ansible.builtin.set_fact:

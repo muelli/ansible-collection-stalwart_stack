@@ -27,7 +27,32 @@ stalwart_default_domain: "{{ (stalwart_domains | selectattr('state', 'equalto', 
 #   wildcard: false         # no wildcard certificate (default: one per domain with dns), see caddy_front
 #   serve_http: true        # Caddy forwards everything on the domain's name to Stalwart
 #                           # (default false: the name is free for a site of yours)
+#   certificate: caddy      # who gets the certificates of the mail names: `caddy` (default:
+#                           # caddy_front orders them and copies them to Stalwart) or `acme`
+#                           # (Stalwart orders them itself, see stalwart_acme_providers; Caddy
+#                           # then neither orders nor copies anything for this domain)
+#   acme_provider: letsencrypt   # with `certificate: acme`: a name from stalwart_acme_providers
+#                           # (default stalwart_acme_default_provider)
+#   acme_names:             # with `certificate: acme`: the names of the certificate
+#     - mail.example.org    # (Domain.certificateManagement.subjectAlternativeNames). Name them all,
+#     - example.org         # the apex too. Left empty Stalwart orders what its docs say for the
+#                           # challenge type: with dns01 the domain and a wildcard for it. A name
+#                           # needs a DNS zone Stalwart manages (dns, zone_origin of this domain).
 stalwart_domains: []
+
+# ACME accounts for the domains with `certificate: acme`; each becomes an AcmeProvider object
+# (matched by its name, which is its description). `directory` cannot be changed afterwards.
+#   - name: letsencrypt
+#     directory: https://acme-v02.api.letsencrypt.org/directory
+#     contact: postmaster@example.org   # Stalwart insists on one; the CA gets it
+#     challenge: dns01            # dns01 (default; the DNS provider of the domain writes the TXT),
+#                                 # http01, tls-alpn01 or dns-persist01
+#     renew_before: "2/3"         # "1/2", "2/3" (default), "3/4" or "4/5" of the validity
+#     reuse_key: false
+#     eab_key_id: ...             # only for CAs with external account binding
+#     eab_hmac_key: ...
+stalwart_acme_providers: []
+stalwart_acme_default_provider: "{{ (stalwart_acme_providers | map(attribute='name') | list | first) | default('') }}"
 
 # Accounts (Account objects of type User, matched by name and domain). Credentials
 # are not managed here: a new account has none and cannot log in (it still receives

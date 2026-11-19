@@ -1,0 +1,57 @@
+---
+# Offline check of `certificate: acme` in the plan (run by tests/run.sh; no host needed): the
+# AcmeProvider objects, Automatic certificate management with the names, and no Certificate object
+# (and so no synced file) for a domain that Stalwart orders itself.
+- name: Render the plan for ACME domains
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  vars_files:
+    - ../roles/stalwart_config/defaults/main.yml
+  tasks:
+    - name: Test inputs
+      ansible.builtin.set_fact:
+        stalwart_hostname: mail.example.org
+        stalwart_acme_hostname_covered: false
+        stalwart_acme_providers:
+          - {name: le, directory: 'https://acme-v02.api.letsencrypt.org/directory', contact: postmaster@example.org}
+        stalwart_domains:
+          - {name: example.org, state: present}
+          - name: acme.example
+            state: present
+            certificate: acme
+            acme_names: [mail.acme.example, acme.example]
+          - {name: wild.example, state: present, certificate: acme, acme_provider: le}
+    - name: Render
+      ansible.builtin.set_fact:
+        ops: >-
+          {{ lookup('ansible.builtin.template', '../roles/stalwart_config/templates/plan.ndjson.j2').splitlines() | map('from_json') | list }}
+        certs: >-
+          {{ lookup('ansible.builtin.template', '../roles/stalwart_config/templates/plan.ndjson.j2').splitlines() | map('from_json') | selectattr('object', 'equalto', 'Certificate') | map(attribute='value') | map('dict2items') | flatten | map(attribute='key') | sort | list }}
+    - name: Pick the objects
+      ansible.builtin.set_fact:
+        providers: "{{ ops | selectattr('object', 'equalto', 'AcmeProvider') | list }}"
+        domains: "{{ ops | selectattr('object', 'equalto', 'Domain') | map(attribute='value') | list }}"
+    - name: Check them
+      ansible.builtin.assert:
+        that:
+          - providers | length == 1
+          - providers[0].matchOn == ['description']
+          - "providers[0].value['acme-le'] == {'description': 'le', 'directory': 'https://acme-v02.api.letsencrypt.org/directory', 'challengeType': 'Dns01', 'contact': {'postmaster@example.org': true}, 'renewBefore': 'R23', 'reuseKey': false}"
+          # the caddy domain keeps its Certificate (and the host name its own); the ACME domains have none
+          - certs == ['certificate-example-org', 'certificate-mail-example-org']
+          - "domains[0]['domain-example-org'].certificateManagement == {'@type': 'Manual', 'certificateId': '#certificate-example-org'}"
+          - "domains[1]['domain-acme-example'].certificateManagement == {'@type': 'Automatic', 'acmeProviderId': '#acme-le', 'subjectAlternativeNames': {'mail.acme.example': true, 'acme.example': true}}"
+          - "domains[2]['domain-wild-example'].certificateManagement == {'@type': 'Automatic', 'acmeProviderId': '#acme-le', 'subjectAlternativeNames': {}}"
+        quiet: true
+    - name: The host name is not given a Certificate when an ACME domain covers it
+      ansible.builtin.set_fact:
+        stalwart_acme_hostname_covered: true
+    - name: Render again
+      ansible.builtin.set_fact:
+        certs2: >-
+          {{ lookup('ansible.builtin.template', '../roles/stalwart_config/templates/plan.ndjson.j2').splitlines() | map('from_json') | selectattr('object', 'equalto', 'Certificate') | map(attribute='value') | map('dict2items') | flatten | map(attribute='key') | sort | list }}
+    - name: Check it
+      ansible.builtin.assert:
+        that: certs2 == ['certificate-example-org']
+        quiet: true

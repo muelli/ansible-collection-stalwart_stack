@@ -14,6 +14,7 @@ step "relay SPF check" ansible-playbook -i localhost, -c local tests/relay_spf.y
 step "accounts and lists in the plan" ansible-playbook -i localhost, -c local tests/accounts_plan.yml
 step "sender routing in the plan" ansible-playbook -i localhost, -c local tests/sender_routing.yml
 step "recipient policies and alias flags in the plan" ansible-playbook -i localhost, -c local tests/policies_plan.yml
+step "ACME domains in the plan" ansible-playbook -i localhost, -c local tests/acme_plan.yml
 step "YAML and Jinja parse" python3 - <<'PY'
 import glob, sys, yaml, jinja2
 bad = 0

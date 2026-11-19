@@ -20,6 +20,24 @@ argument_specs:
           catch_all: {type: str, description: "Catch-all address, which must exist. Left out keeps the server's value; null or '' clears it."}
           wildcard: {type: bool, default: true, description: "false: no wildcard certificate."}
           serve_http: {type: bool, default: false, description: "true: Caddy forwards everything on the domain's own name to Stalwart."}
+          certificate: {type: str, default: caddy, choices: [caddy, acme], description: "caddy: caddy_front orders the certificates and copies them to Stalwart; acme: Stalwart orders them itself (stalwart_acme_providers)."}
+          acme_provider: {type: str, description: "With certificate acme: name of an entry of stalwart_acme_providers; default stalwart_acme_default_provider."}
+          acme_names: {type: list, elements: str, default: [], description: "With certificate acme: the names of the certificate. Empty: what Stalwart orders by default (with dns01 the domain and a wildcard)."}
+      stalwart_acme_providers:
+        type: list
+        elements: dict
+        default: []
+        description: ACME accounts (AcmeProvider objects) for the domains with certificate acme.
+        options:
+          name: {type: str, required: true, description: "Name; the AcmeProvider description."}
+          directory: {type: str, required: true, description: "ACME directory URL (cannot be changed afterwards)."}
+          contact: {type: str, required: true, description: "Contact email of the ACME account; Stalwart requires one."}
+          challenge: {type: str, default: dns01, choices: [dns01, http01, tls-alpn01, dns-persist01], description: "Challenge type."}
+          renew_before: {type: str, default: "2/3", choices: ["1/2", "2/3", "3/4", "4/5"], description: "Renew after this share of the validity has passed."}
+          reuse_key: {type: bool, default: false, description: "Reuse the private key on renewal."}
+          eab_key_id: {type: str, description: "External account binding key id."}
+          eab_hmac_key: {type: str, no_log: true, description: "External account binding HMAC key."}
+      stalwart_acme_default_provider: {type: str, description: "Provider of the acme domains without acme_provider; default the first of stalwart_acme_providers."}
       stalwart_accounts:
         type: list
         elements: dict

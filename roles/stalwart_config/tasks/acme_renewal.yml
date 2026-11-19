@@ -1,0 +1,60 @@
+---
+# Stalwart orders the certificate of a domain with `certificate: acme` as an AcmeRenewal task. Saving
+# the domain schedules the first order; a change of acme_names afterwards is only picked up when
+# someone creates the task again. So: for every such domain, if a name it should have is in no
+# Certificate yet, start the task. Domains whose names are all covered are left to Stalwart's own
+# renewal schedule. With no acme_names the wanted names are what Stalwart orders for dns01: the
+# domain and a wildcard for it.
+- name: List the domains of the server
+  ansible.builtin.command:
+    argv: ["{{ stalwart_bin_dir }}/stalwart-cli", query, Domain, --fields, name, --json, --no-color]
+  environment:
+    STALWART_URL: "{{ stalwart_mgmt_url }}"
+    STALWART_USER: "{{ stalwart_admin_user }}"
+    STALWART_PASSWORD: "{{ stalwart_admin_password }}"
+  register: stalwart_acme_domain_query
+  changed_when: false
+
+- name: List the names the certificates of the server cover
+  ansible.builtin.command:
+    argv: ["{{ stalwart_bin_dir }}/stalwart-cli", query, Certificate, --fields, subjectAlternativeNames, --json, --no-color]
+  environment:
+    STALWART_URL: "{{ stalwart_mgmt_url }}"
+    STALWART_USER: "{{ stalwart_admin_user }}"
+    STALWART_PASSWORD: "{{ stalwart_admin_password }}"
+  register: stalwart_acme_cert_query
+  changed_when: false
+
+- name: Work out the domains with a name that no certificate covers
+  ansible.builtin.set_fact:
+    stalwart_acme_tasks: >-
+      {%- set ids = {} -%}
+      {%- for l in stalwart_acme_domain_query.stdout_lines if l is match('^[{]') -%}
+      {%- set d = l | from_json -%}{%- set _ = ids.update({d.name: d.id}) -%}
+      {%- endfor -%}
+      {%- set covered = [] -%}
+      {%- for l in stalwart_acme_cert_query.stdout_lines if l is match('^[{]') -%}
+      {%- set c = l | from_json -%}
+      {%- for n in (c.subjectAlternativeNames | default({})) -%}{%- set _ = covered.append(n | lower) -%}{%- endfor -%}
+      {%- endfor -%}
+      {%- set out = [] -%}
+      {%- for d in stalwart_domains if d.state == 'present' and d.certificate | default('caddy') == 'acme' and d.name in ids -%}
+      {%-   set want = d.acme_names | default([]) if d.acme_names | default([]) | length > 0 else [d.name, '*.' ~ d.name] -%}
+      {%-   set miss = [] -%}
+      {%-   for n in want if (n | lower) not in covered -%}{%- set _ = miss.append(n) -%}{%- endfor -%}
+      {%-   if miss | length > 0 -%}{%- set _ = out.append({'name': d.name, 'missing': miss, 'body': {'@type': 'AcmeRenewal', 'domainId': ids[d.name]} | to_json}) -%}{%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+
+- name: Start the ACME order of every domain whose names are not all covered
+  ansible.builtin.command:
+    argv: ["{{ stalwart_bin_dir }}/stalwart-cli", create, Task, --stdin, --no-color]
+    stdin: "{{ item.body }}"
+  environment:
+    STALWART_URL: "{{ stalwart_mgmt_url }}"
+    STALWART_USER: "{{ stalwart_admin_user }}"
+    STALWART_PASSWORD: "{{ stalwart_admin_password }}"
+  loop: "{{ stalwart_acme_tasks }}"
+  loop_control:
+    label: "{{ item.name }}: not covered yet: {{ item.missing | join(', ') }}"
+  changed_when: true

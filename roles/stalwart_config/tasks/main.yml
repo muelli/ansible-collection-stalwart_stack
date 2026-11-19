@@ -31,6 +31,17 @@
   no_log: true
 
 # Only the mail check, nothing applied: `just check-mail` in bitbox sets this.
+- name: Work out whether an ACME domain provides the certificate of stalwart_hostname
+  ansible.builtin.set_fact:
+    # A domain with `certificate: acme` covers it when it lists it in acme_names, or has no acme_names
+    # (Stalwart then orders the domain and a wildcard for it with DNS-01) and the host lies below it.
+    stalwart_acme_hostname_covered: >-
+      {%- set r = namespace(v=false) -%}
+      {%- for d in stalwart_domains if d.state == 'present' and d.certificate | default('caddy') == 'acme' -%}
+      {%-   if stalwart_hostname | default('') | length > 0 and (stalwart_hostname in d.acme_names | default([]) or (d.acme_names | default([]) | length == 0 and stalwart_hostname.endswith('.' ~ d.name))) -%}{%- set r.v = true -%}{%- endif -%}
+      {%- endfor -%}
+      {{ r.v }}
+
 - name: Check the mail DNS records and the TLS of the MX hosts, without applying anything
   ansible.builtin.include_tasks: check_mail_dns.yml
   when: stalwart_check_mail_only | bool
@@ -43,9 +54,11 @@
   ansible.builtin.stat:
     path: "{{ stalwart_certs_dir }}/{{ item.name }}.{{ ext }}"
   loop: >-
-    {{ stalwart_domains | selectattr('state', 'equalto', 'present') | list
+    {{ stalwart_domains | selectattr('state', 'equalto', 'present') | rejectattr('certificate', 'defined') | list
+       + stalwart_domains | selectattr('state', 'equalto', 'present') | selectattr('certificate', 'defined') | rejectattr('certificate', 'equalto', 'acme') | list
        + ([{'name': stalwart_hostname}]
-          if stalwart_hostname not in (stalwart_domains | selectattr('state', 'equalto', 'present') | map(attribute='name') | list) else []) }}
+          if stalwart_hostname not in (stalwart_domains | selectattr('state', 'equalto', 'present') | map(attribute='name') | list)
+             and not stalwart_acme_hostname_covered | bool else []) }}
   loop_control:
     label: "{{ item.name }}"
   vars:
@@ -468,6 +481,13 @@
           Stalwart publishes DNS records (CNAME) for {{ stalwart_zone_missing | join(', ') }}, but caddy_front serves no
           site there. Add the label to stalwart_subdomains (or the domain's `subdomains`), or set
           stalwart_check_zone: false.
+
+# Domains that Stalwart orders the certificates of itself: start the order when a name is not covered yet.
+- name: Start the ACME orders that are due
+  ansible.builtin.include_tasks: acme_renewal.yml
+  when:
+    - stalwart_domains | selectattr('state', 'equalto', 'present') | selectattr('certificate', 'defined') | selectattr('certificate', 'equalto', 'acme') | list | length > 0
+    - not ansible_check_mode
 
 # A new stalwart_hostname changes the MX and the client-configuration and MTA-STS CNAMEs, which
 # Stalwart only rewrites when a DnsManagement task runs: start those where public DNS is stale.
