@@ -130,7 +130,12 @@
   ansible.builtin.set_fact:
     # Domains with `certificate: acme` are left out: Stalwart orders their certificates itself, so Caddy
     # neither serves a placeholder nor copies a certificate for them.
-    caddy_stalwart_entries: "{{ (stalwart_domains | rejectattr('certificate', 'equalto', 'acme') | list) + caddy_stalwart_host_entry }}"
+    caddy_stalwart_entries: >-
+      {%- set out = [] -%}
+      {%- for d in stalwart_domains if d.certificate | default('caddy') != 'acme' -%}
+      {%- set _ = out.append(d) -%}
+      {%- endfor -%}
+      {{ out + caddy_stalwart_host_entry }}
 
 - name: Work out which Stalwart names get a site that forwards to Stalwart
   ansible.builtin.set_fact:
