@@ -305,7 +305,7 @@ envelope sender, or that has several From addresses (`550 5.7.1`); accounts in
 local account and two addresses are refused. Submissions through JMAP (webmail) pass the same
 DATA stage: a spoofed From is refused there too (`forbiddenToSend`, `550 5.7.1`). `stalwart_webhooks` makes Stalwart POST events (by default failed DNS
 record publishing, ACME and certificate trouble) to an endpoint you run; the alerts should not
-depend on the mail server they watch.
+depend on the mail server they watch. A healthchecks.io URL (`https://hc-ping.com/<uuid>/fail`) works as the endpoint; the example is in the role's defaults.
 
 **Sharing** (`stalwart_collections`) gives one account or group access to a folder, calendar
 or address book of another. It is done over JMAP as the administrator, so no password of the

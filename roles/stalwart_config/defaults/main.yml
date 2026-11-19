@@ -169,6 +169,22 @@ stalwart_recipient_policy_spam_score: 20
 #     lossy: false
 #     allow_invalid_certs: false
 #     state: present                                 # absent deletes it
+# healthchecks.io (hc-ping.com): the UUID is in the URL, so no token is needed. A check that only
+# ever receives /fail suits events: give it a long period and treat any ping as the alert. The
+# body of the request (Stalwart's JSON for the event) shows up in the check's log.
+#   - url: https://hc-ping.com/01234567-89ab-cdef-0123-456789abcdef/fail
+#     events:
+#       - dns.record-creation-failed
+#       - dns.record-propagation-timeout
+#       - acme.error
+#       - acme.auth-error
+#       - acme.order-invalid
+#       - server.startup-error
+#     level: warn
+#   # A second check that learns when Stalwart (re)starts:
+#   - url: https://hc-ping.com/fedcba98-7654-3210-fedc-ba9876543210/start
+#     events: [server.startup]
+#     level: info
 stalwart_webhooks: []
 stalwart_webhook_default_events:
   - dns.record-creation-failed
