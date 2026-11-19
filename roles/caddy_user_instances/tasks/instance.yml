@@ -4,7 +4,7 @@
 #   config.yml   the bare Caddyfile and conf.d/<site>.conf
 #   units.yml    systemd user units, start, reload
 #   smoke.yml    request a page through the front socket (caddy_user_smoke_test)
-- name: Resolve the instance settings
+- name: "Resolve the instance settings ({{ _caddy_user }})"
   ansible.builtin.set_fact:
     _caddy_user: "{{ caddy_user_item.name | default(caddy_user_item) }}"
     # What the root Caddy forwards to this account (caddy_front reads the same list).
@@ -19,7 +19,7 @@
       {%- endfor -%}
       {{ r }}
 
-- name: Check the sites of the instance
+- name: "Check the sites of the instance ({{ _caddy_user }})"
   ansible.builtin.assert:
     that:
       - _caddy_user_sites | map(attribute='name') | list | length == _caddy_user_sites | map(attribute='name') | list | unique | length
@@ -28,15 +28,15 @@
       The sites of {{ _caddy_user }} need distinct names (the file conf.d/<name>.conf) and
       hosts: their own, or `hosts:` on the instance.
 
-- name: Look up and prepare the account
+- name: "Look up and prepare the account ({{ _caddy_user }})"
   ansible.builtin.include_tasks: account.yml
 
-- name: Write the configuration
+- name: "Write the configuration ({{ _caddy_user }})"
   ansible.builtin.include_tasks: config.yml
 
-- name: Install and start the units
+- name: "Install and start the units ({{ _caddy_user }})"
   ansible.builtin.include_tasks: units.yml
 
-- name: Check that the instance answers
+- name: "Check that the instance answers ({{ _caddy_user }})"
   ansible.builtin.include_tasks: smoke.yml
   when: caddy_user_smoke_test | bool

@@ -1,5 +1,5 @@
 ---
-- name: Write the user units
+- name: "Write the user units of {{ _caddy_user }}"
   ansible.builtin.template:
     src: "{{ item }}.j2"
     dest: "{{ _caddy_home }}/.config/systemd/user/{{ item }}"
@@ -12,12 +12,12 @@
     - caddy-user.service
   register: caddy_user_units
 
-- name: Wait for the user manager
+- name: "Wait for the user manager of {{ _caddy_user }}"
   ansible.builtin.wait_for:
     path: "/run/user/{{ _caddy_uid }}/bus"
     timeout: 30
 
-- name: Clear a failed state of the front socket (trigger limit hit while Caddy could not start)
+- name: "Clear a failed state of the front socket of {{ _caddy_user }}"
   ansible.builtin.command:
     argv: [systemctl, --user, reset-failed, caddy-user.socket, caddy-user-proxy.service, caddy-user.service]
   become: true
@@ -27,7 +27,21 @@
   changed_when: false
   failed_when: false   # units not loaded yet on a first run
 
-- name: Enable and start the front socket
+# A socket cannot be restarted while the service it triggers is running ("Socket service
+# ... already active, refusing"). Stopping the idle proxy also stops Caddy
+# (StopWhenUnneeded); the next request starts both with the new units.
+- name: "Stop the proxy of {{ _caddy_user }} so the socket can be restarted"
+  ansible.builtin.command:
+    argv: [systemctl, --user, stop, caddy-user-proxy.service]
+  become: true
+  become_user: "{{ _caddy_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ _caddy_uid }}"
+  changed_when: true
+  failed_when: false
+  when: caddy_user_units.changed
+
+- name: "Enable and start the front socket of {{ _caddy_user }}"
   ansible.builtin.systemd_service:
     name: caddy-user.socket
     scope: user
@@ -39,7 +53,7 @@
   environment:
     XDG_RUNTIME_DIR: "/run/user/{{ _caddy_uid }}"
 
-- name: Reload a running instance after a configuration change
+- name: "Reload the instance of {{ _caddy_user }} after a configuration change"
   ansible.builtin.command:
     argv: [systemctl, --user, try-reload-or-restart, caddy-user.service]
   become: true

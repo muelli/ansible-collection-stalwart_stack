@@ -1,5 +1,5 @@
 ---
-- name: Create the configuration directories of the account
+- name: "Create the configuration directories of the account ({{ _caddy_user }})"
   ansible.builtin.file:
     path: "{{ _caddy_home }}/{{ item }}"
     state: directory
@@ -13,7 +13,7 @@
     - .config/systemd
     - .config/systemd/user
 
-- name: Write the bare Caddyfile
+- name: "Write the bare Caddyfile ({{ _caddy_user }})"
   ansible.builtin.template:
     src: Caddyfile-user.j2
     dest: "{{ _caddy_home }}/.config/caddy/Caddyfile"
@@ -24,7 +24,7 @@
 
 # Files in conf.d that are not listed here are never touched: they are the
 # account's own.
-- name: Write conf.d/<name>.conf for every present site
+- name: "Write conf.d/<name>.conf for every present site ({{ _caddy_user }})"
   ansible.builtin.template:
     src: site.conf.j2
     dest: "{{ _caddy_conf_dir }}/{{ item.name }}.conf"
@@ -36,7 +36,7 @@
     label: "{{ item.name }}"
   register: caddy_user_site_files
 
-- name: Remove conf.d/<name>.conf of the sites marked absent
+- name: "Remove conf.d/<name>.conf of the sites marked absent ({{ _caddy_user }})"
   ansible.builtin.file:
     path: "{{ _caddy_conf_dir }}/{{ item.name }}.conf"
     state: absent
@@ -45,7 +45,7 @@
     label: "{{ item.name }}"
   register: caddy_user_site_removed
 
-- name: Remember whether the configuration changed
+- name: "Remember whether the configuration changed ({{ _caddy_user }})"
   ansible.builtin.set_fact:
     _caddy_config_changed: >-
       {{ caddy_user_base.changed
