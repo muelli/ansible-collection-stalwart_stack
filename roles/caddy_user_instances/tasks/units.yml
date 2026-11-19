@@ -27,10 +27,23 @@
   changed_when: false
   failed_when: false   # units not loaded yet on a first run
 
-# A socket cannot be restarted while the service it triggers is running ("Socket service
-# ... already active, refusing"). Stopping the idle proxy also stops Caddy
-# (StopWhenUnneeded); the next request starts both with the new units.
-- name: "Stop the proxy of {{ _caddy_user }} so the socket can be restarted"
+# A socket cannot be started or restarted while the service it triggers is running ("Socket
+# service ... already active, refusing"). That happens after units changed and when a
+# restart failed halfway: the socket is then dead while the proxy lingers, and every later
+# run fails the same way. Stopping the idle proxy also stops Caddy (StopWhenUnneeded); the
+# next request starts both.
+- name: "Check whether the front socket of {{ _caddy_user }} is listening"
+  ansible.builtin.command:
+    argv: [systemctl, --user, is-active, --quiet, caddy-user.socket]
+  become: true
+  become_user: "{{ _caddy_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ _caddy_uid }}"
+  register: caddy_user_socket_active
+  changed_when: false
+  failed_when: false
+
+- name: "Stop the proxy of {{ _caddy_user }} so the socket can be (re)started"
   ansible.builtin.command:
     argv: [systemctl, --user, stop, caddy-user-proxy.service]
   become: true
@@ -39,7 +52,7 @@
     XDG_RUNTIME_DIR: "/run/user/{{ _caddy_uid }}"
   changed_when: true
   failed_when: false
-  when: caddy_user_units.changed
+  when: caddy_user_units.changed or caddy_user_socket_active.rc != 0
 
 - name: "Enable and start the front socket of {{ _caddy_user }}"
   ansible.builtin.systemd_service:
