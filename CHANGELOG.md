@@ -24,7 +24,7 @@
   or that has several From addresses: a DATA-stage Sieve script `from-check`, run for
   authenticated sessions except `stalwart_enforce_from_header_except`. Tested on a real host
   with SMTP submission; JMAP submission (Bulwark) was not tested. `false` removes the hook.
-- Stalwart 1.1.1 (checksums for x86_64 and aarch64) and Bulwark 1.21.2 are the new defaults.
+- Stalwart 1.1.1 (checksums for x86_64 and aarch64) and Bulwark 1.21.3 are the new defaults.
   stalwart-cli is 2.0.0 (released the same day; checksums for x86_64 and aarch64). Its output
   changed (`Linked by:  Account <id>` instead of `Account#<id>`); the roles read the group
   members of a failed group deletion in both forms. Checked on a real host: apply, apply failures

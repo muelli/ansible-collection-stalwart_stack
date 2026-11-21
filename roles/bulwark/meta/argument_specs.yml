@@ -4,7 +4,7 @@ argument_specs:
     short_description: Bulwark webmail as a Podman Quadlet container
     options:
       bulwark_hostname: {type: str, description: "Public host name, for example webmail.example.org. caddy_front serves it and allows it to call Stalwart across origins."}
-      bulwark_version: {type: str, default: "1.21.0", description: "Image tag. Needs Stalwart 1.0 with Bulwark 1.18.0 or newer."}
+      bulwark_version: {type: str, default: "1.21.3", description: "Image tag. Needs Stalwart 1.0 with Bulwark 1.18.0 or newer."}
       bulwark_image: {type: str, default: ghcr.io/bulwarkmail/webmail, description: "Image name."}
       bulwark_image_digest: {type: str, default: "", description: "Optional sha256:... digest to pin the image."}
       bulwark_jmap_url: {type: str, description: "Public HTTPS URL of the JMAP server; derived from stalwart_hostname."}
