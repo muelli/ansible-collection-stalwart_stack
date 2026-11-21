@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## 0.2.0
+
+- `certificate: acme` on a `stalwart_domains` entry lets Stalwart order the certificates of that domain itself
+  (DNS-01 through the domain's DNS management) instead of copying them from Caddy. `acme_names` lists the
+  names explicitly (they end up in one multi-SAN certificate; an empty list did not issue on the Stalwart
+  version tested), `stalwart_acme_providers` defines the ACME accounts, and caddy_front neither serves nor
+  copies certificates for such a domain. An `AcmeRenewal` task is created for names without a certificate.
+  Not allowed together with `serve_http: true`.
+- `fallback` on a `caddy_user_instances` entry adds a catch-all `http://` block to the account's Caddyfile:
+  the answer for every host of the instance that no site names.
+- `caddy_user_instances`: the front socket no longer hits systemd's trigger limit (a Caddy that cannot start
+  made it fail for good), a failed or half-restarted socket is recovered by stopping the lingering proxy
+  and clearing the failed state, and every task names the account it works on.
+- `stalwart_webhooks` has a healthchecks.io example in the defaults.
+- caddy_front: `certificate` need not be set on `stalwart_domains` entries (an Ansible filter failed on a
+  missing attribute).
 - stalwart_config creates a DnsManagement task for each automatically managed domain whose published MX or CNAME records name another host than Stalwart's zone file (`stalwart_dns_republish`).
 - `stalwart_check_mail_healthcheck_uuid` pings healthchecks.io after the mail check (`/fail` with the problems when there are any).
 - `stalwart_check_mail_only: true` runs only the mail check and ends stalwart_config before anything is applied.
