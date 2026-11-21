@@ -32,7 +32,7 @@
 # restart failed halfway: the socket is then dead while the proxy lingers, and every later
 # run fails the same way. Stopping the idle proxy also stops Caddy (StopWhenUnneeded); the
 # next request starts both.
-- name: "Check whether the front socket of {{ _caddy_user }} is listening"
+- name: "Check whether the front socket is listening ({{ _caddy_user }})"
   ansible.builtin.command:
     argv: [systemctl, --user, is-active, --quiet, caddy-user.socket]
   become: true
@@ -43,7 +43,7 @@
   changed_when: false
   failed_when: false
 
-- name: "Stop the proxy of {{ _caddy_user }} so the socket can be (re)started"
+- name: "Stop the proxy so the socket can be (re)started ({{ _caddy_user }})"
   ansible.builtin.command:
     argv: [systemctl, --user, stop, caddy-user-proxy.service]
   become: true
@@ -66,7 +66,7 @@
   environment:
     XDG_RUNTIME_DIR: "/run/user/{{ _caddy_uid }}"
 
-- name: "Reload the instance of {{ _caddy_user }} after a configuration change"
+- name: "Reload the instance after a configuration change ({{ _caddy_user }})"
   ansible.builtin.command:
     argv: [systemctl, --user, try-reload-or-restart, caddy-user.service]
   become: true

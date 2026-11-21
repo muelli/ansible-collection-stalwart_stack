@@ -3,7 +3,7 @@
 #   in:  stalwart_dig_queries   list of "TYPE name" ("PTR 192.0.2.1" asks for the reverse name)
 #   out: stalwart_dig_answers   dict "TYPE name" -> list of answers, merged with earlier calls
 # An empty list means no answer: the name does not exist, has no such record, or the resolver failed.
-- name: Ask public DNS {{ stalwart_dig_queries | length }} questions
+- name: "Ask public DNS questions ({{ stalwart_dig_queries | length }})"
   ansible.builtin.command:
     argv:
       - sh

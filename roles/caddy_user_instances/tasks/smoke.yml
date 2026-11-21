@@ -27,6 +27,7 @@
     - name: Ask the instance why it does not answer
       ansible.builtin.shell:
         cmd: |
+          set -o pipefail
           caddy validate --config {{ _caddy_home }}/.config/caddy/Caddyfile 2>&1 | tail -n 15
           echo '--- journal of caddy-user.service'
           journalctl --user -u caddy-user.service -n 15 --no-pager 2>&1
